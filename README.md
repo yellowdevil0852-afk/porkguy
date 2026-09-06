@@ -31,6 +31,18 @@ node build.js
 
 產出 `porkguy.html`（單一檔案約 6.5 MB）和一個把 GitHub Pages 導到它的 `index.html`。
 
+改完程式要讓線上的網址跟著更新，就是三步：
+
+```bash
+node build.js
+git add -A
+git commit -m "改了什麼"
+git push
+```
+
+推上去之後 GitHub Pages 大概 30 秒到一分鐘會自動重新發佈，重新整理網頁就是新版了。
+（對方的瀏覽器可能有快取，叫他 Ctrl+F5 強制重載。）
+
 ## 原始碼
 
 `build.js` 會把 `src/` 底下的檔案照順序串成一個 IIFE，再連同函式庫和
