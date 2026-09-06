@@ -17,7 +17,8 @@ function hookConn(c) {
     $('netTag').classList.remove('hide');
     $('netTag').textContent = '線上';
     toast('對手已連線');
-    if (net.host) netSend({ t: 'sync', s: serialize() });
+    // 這裡不能直接送 sync：兩邊還在選角，這時候 serialize() 出來的是空局面。
+    // 等房主選完、也收到客人的選角之後，startPlay() 才會送出真正的開局狀態。
   });
   c.on('data', m => { netQ = netQ.then(() => onNetData(m)).catch(e => console.error(e)); });
   c.on('close', () => { toast('對手已斷線，請對方用同一組房號重新加入'); $('netTag').textContent = '已斷線'; });
