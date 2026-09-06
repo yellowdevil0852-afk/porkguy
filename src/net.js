@@ -1,0 +1,170 @@
+/* ══════════════ 線上對戰（PeerJS / WebRTC）══════════════
+   出手方把「做了什麼」送過去，兩邊跑同一套 runAction。
+   所有牽涉亂數的地方都走 grng（同一個種子），所以不必傳骰子結果。 */
+
+let net = { peer: null, conn: null, host: false };
+let netQ = Promise.resolve(), ready = Promise.resolve();
+const PREFIX = 'wztac2-';
+const CODEC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const mkCode = () => Array.from({ length: 6 },
+  () => CODEC[Math.floor(Math.random() * CODEC.length)]).join('');
+
+function netSend(o) { if (net.conn && net.conn.open) try { net.conn.send(o); } catch (e) {} }
+
+function hookConn(c) {
+  net.conn = c;
+  c.on('open', () => {
+    $('netTag').classList.remove('hide');
+    $('netTag').textContent = '線上';
+    toast('對手已連線');
+    if (net.host) netSend({ t: 'sync', s: serialize() });
+  });
+  c.on('data', m => { netQ = netQ.then(() => onNetData(m)).catch(e => console.error(e)); });
+  c.on('close', () => { toast('對手已斷線，請對方用同一組房號重新加入'); $('netTag').textContent = '已斷線'; });
+  c.on('error', () => toast('連線錯誤'));
+}
+
+function serialize() {
+  return {
+    seed: G.seed, w: W, cur: G.cur, turn: G.turn, hold: G.hold.slice(),
+    units: G.units.map(u => ({
+      id: u.id, side: u.side, cls: u.cls, kind: u.kind, x: u.x, y: u.y, dir: u.dir,
+      hp: u.hp, lv: u.lv, exp: u.exp, alive: u.alive, moved: u.moved, acted: u.acted,
+      awake: u.awake, equip: u.equip, cds: u.cds, st: u.st, act: u.act, pas: u.pas, down: u.down,
+      pts: u.pts, alloc: u.alloc, swapEq: u.swapEq, swapSk: u.swapSk
+    })),
+    bag: G.bag, books: G.books, orbs: G.orbs, gorbs: G.gorbs, picks: G.picks,
+    chests: CHESTS.map(c => c.opened ? 1 : 0), traps: TRAPS, iid: itemSeq, bid: bookSeq
+  };
+}
+
+async function applySync(s) {
+  G.units.forEach(removeView);
+  clearTags();
+  G.units = [];
+  setSize(s.w || W);                    // 地圖大小以主機為準
+  G.seed = s.seed;
+  grng = mulberry32(s.seed ^ 0x9e3779b9);
+  genMap(s.seed);
+  buildWorld();
+  CHESTS.forEach((c, i) => { c.opened = !!s.chests[i]; });
+  refreshChests();
+  TRAPS = s.traps || [];
+  refreshTraps();
+  G.cur = s.cur; G.turn = s.turn; G.hold = s.hold; G.bag = s.bag; G.over = null;
+  G.books = s.books || [[], []];
+  G.orbs = s.orbs || [[0,0,0,0,0],[0,0,0,0,0]];
+  G.gorbs = s.gorbs || [[0,0,0,0,0],[0,0,0,0,0]];
+  G.news = [0, 0];
+  G.picks = s.picks || [[], []];
+  itemSeq = s.iid || 0; bookSeq = s.bid || 0;
+  uidSeq = 0;
+  for (const d of s.units) {
+    const u = Object.assign({ equip: {}, cds: {}, st: [], act: [null, null, null], pas: null,
+      pts: 0, alloc: { atk: 0, def: 0, hp: 0 }, swapEq: {}, swapSk: {} }, d);
+    uidSeq = Math.max(uidSeq, u.id + 1);
+    G.units.push(u);
+    if (u.alive) buildUnitView(u);
+  }
+  G.units.forEach(makeTag);
+  camTarget.set(wx(CAMP[myTeam][0]), 0, wz(CAMP[myTeam][1]));
+  camAz = myTeam === 0 ? Math.PI * 0.25 : Math.PI * 1.25;
+  updCam();
+  dimDone(); refreshTop(); refreshRoster(); drawMinimap(); refreshBadge();
+}
+
+async function onNetData(m) {
+  await ready;
+  if (m.t === 'act') {
+    if (m.a.kind === 'equip') applyEquip(m.a);
+    else if (m.a.kind === 'unequip') applyUnequip(m.a);
+    else if (m.a.kind === 'skset') applySetSkill(m.a);
+    else if (m.a.kind === 'skdis') applyDismantle(m.a);
+    else if (m.a.kind === 'skcraft') applyCraft(m.a);
+    else if (m.a.kind === 'spend') applySpend(m.a);
+    else if (m.a.kind === 'gdis') applyScrap(m.a);
+    else if (m.a.kind === 'gdisall') applyScrapAll(m.a);
+    else if (m.a.kind === 'gcraft') applyCraftItem(m.a);
+    else await runAction(m.a);
+  } else if (m.t === 'end') await doEndTurn(false);
+  else if (m.t === 'again') { toast('對手開了新的一局'); ready = Promise.resolve(newGame(m.seed, G.picks)); }
+  else if (m.t === 'sync') { enterGame(); await applySync(m.s); }
+  else if (m.t === 'pick') onGuestPick(m.cls);
+}
+
+function startHost() {
+  const code = mkCode();
+  $('mNet').classList.add('hide');
+  $('mWait').classList.remove('hide');
+  $('roomCode').textContent = code;
+  net.host = true;
+  net.peer = new Peer(PREFIX + code, { debug: 0 });
+  net.peer.on('open', () => { $('mWaitNote').textContent = '房間已開啟，等待對手加入…'; });
+  net.peer.on('connection', c => {
+    const fresh = !$('menu').classList.contains('hide');
+    hookConn(c);
+    if (fresh) { mode = 'online'; myTeam = 0; hostPick = null; guestPick = null; hostPickFlow(); }
+  });
+  net.peer.on('error', e => {
+    $('mWaitNote').textContent = e.type === 'unavailable-id'
+      ? '房號重複，請再按一次建立房間' : '無法連上信令伺服器：' + e.type;
+  });
+}
+
+function startJoin() {
+  const code = $('mCode').value.trim().toUpperCase();
+  if (code.length !== 6) { $('mNetNote').textContent = '請輸入 6 碼房號'; return; }
+  $('mNetNote').textContent = '連線中…';
+  net.host = false;
+  net.peer = new Peer({ debug: 0 });
+  net.peer.on('open', () => {
+    const c = net.peer.connect(PREFIX + code, { reliable: true });
+    hookConn(c);
+    c.on('open', () => { mode = 'online'; myTeam = 1; guestPickFlow(); });
+  });
+  net.peer.on('error', e => {
+    $('mNetNote').textContent = e.type === 'peer-unavailable'
+      ? '找不到這個房間，確認房號是否正確' : '連線失敗：' + e.type;
+  });
+}
+
+
+/* ── 線上選角：兩邊各自挑三個職業，湊齊了才由房主開局 ── */
+
+let hostPick = null, guestPick = null;
+
+function hostPickFlow() {
+  openPick(0, p => {
+    hostPick = p;
+    $('mPick').classList.add('hide');
+    $('mWait').classList.remove('hide');
+    $('roomCode').textContent = '已選好';
+    $('mWaitNote').textContent = guestPick ? '開局中…' : '等待對手選角…';
+    tryStartHost();
+  });
+}
+function onGuestPick(cls) {
+  guestPick = cls;
+  if (!hostPick) { $('mWaitNote').textContent = '對手選好了，等你'; return; }
+  tryStartHost();
+}
+function tryStartHost() {
+  if (!hostPick || !guestPick) return;
+  startPlay([hostPick, guestPick]);
+}
+function guestPickFlow() {
+  $('mNet').classList.add('hide');
+  openPick(1, p => {
+    netSend({ t: 'pick', cls: p });
+    $('mPick').classList.add('hide');
+    $('mWait').classList.remove('hide');
+    $('roomCode').textContent = '已選好';
+    $('mWaitNote').textContent = '等待房主開局…';
+  });
+}
+function enterGame() {
+  $('menu').classList.add('hide');
+  $('hud').classList.remove('hide');
+  ['mNet', 'mWait', 'mPick'].forEach(i => $(i).classList.add('hide'));
+  $('mMain').classList.remove('hide');
+}

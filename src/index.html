@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>豬肉戰士 — 戰棋 RPG</title>
+<style>/*__CSS__*/</style>
+</head>
+<body>
+
+<div id="hud" class="hide">
+  <div id="topbar" class="panel">
+    <span id="turnNo">第 1 回合</span>
+    <span id="turnWho" class="s0"><i class="dot s0"></i>藍軍</span>
+    <span id="force"></span>
+    <span class="holds">
+      <span class="hold h0">王座 <b id="hold0">0</b></span>
+      <span class="hold h1">王座 <b id="hold1">0</b></span>
+    </span>
+    <span id="netTag" class="hide">線上</span>
+  </div>
+  <button id="btnSet" class="gear" title="設定">⚙</button>
+
+  <div id="unitCard" class="panel hide">
+    <div id="ucHead"><span id="ucName"></span><span id="ucLv"></span></div>
+    <div class="bar bhp"><i id="ucHp"></i></div>
+    <div class="lbl"><span>生命</span><span id="ucHpT"></span></div>
+    <div id="xpRow">
+      <div class="bar bxp"><i id="ucXp"></i></div>
+      <div class="lbl"><span>經驗</span><span id="ucXpT"></span></div>
+    </div>
+    <div id="ucStats">
+      <div>攻擊<b id="ucAtk"></b></div><div>防禦<b id="ucDef"></b></div>
+      <div>移動<b id="ucMov"></b></div><div>射程<b id="ucRng"></b></div>
+    </div>
+    <div id="ucType"></div>
+    <div id="ucTer"></div>
+    <div id="ucEquip"></div>
+  </div>
+
+  <div id="roster"></div>
+
+  <div id="forecast" class="panel hide">
+    <h4 id="fcTitle">戰鬥預測</h4>
+    <div class="fcrow"><span id="fcAName"></span><b id="fcA" class="dmg">0</b></div>
+    <div class="fcrow"><span id="fcBName"></span><b id="fcB" class="dmg">0</b></div>
+    <div id="fcNote"></div>
+  </div>
+
+  <div id="mmBox" class="panel"><canvas id="mm"></canvas></div>
+  <div id="log" class="panel"></div>
+
+  <div id="skills" class="hide"></div>
+  <div id="actbar" class="hide">
+    <button id="btnUndo">取消移動</button>
+  </div>
+  <div id="bottom">
+    <button id="btnEnd" class="prime">結束回合</button>
+    <button id="btnAI">AI 對手：關</button>
+    <button id="btnBag">背包<i id="bagBadge" class="badge hide">❗</i></button>
+    <button id="btnHelp">說明</button>
+    <button id="btnQuit">主選單</button>
+  </div>
+
+  <div id="tags"></div>
+  <div id="reticle" class="hide"></div>
+  <div id="skillTip" class="hide"></div>
+</div>
+
+<div id="menu" class="overlay">
+  <div class="card panel">
+    <h1>豬肉戰士</h1>
+    <div class="sub">PORKGUY · TACTICS RPG</div>
+    <div id="mMain" class="col">
+      <button class="prime" id="mLocal">本機對戰</button>
+      <button id="mOnline">線上對戰</button>
+      <button id="mHelp">遊戲說明</button>
+      <button id="mSet">設定</button>
+      <div class="sizeRow">地圖大小<div id="mSize"></div></div>
+      <div class="note">同一台電腦輪流出手，或連線跟遠方的對手下。<br>全程只需要滑鼠點擊。</div>
+    </div>
+    <div id="mNet" class="col hide">
+      <button class="prime" id="mHost">建立房間</button>
+      <div class="row"><input id="mCode" maxlength="6" placeholder="房號"><button id="mJoin">加入</button></div>
+      <div class="note" id="mNetNote">建立房間的一方是藍軍，先手。<br>線上模式需要網路連線。</div>
+      <button class="back" id="mBack">← 返回</button>
+    </div>
+    <div id="mPick" class="col hide">
+      <div id="pickWho">藍軍　選三個職業</div>
+      <div id="pickList"></div>
+      <div class="note" id="pickNote">點頭像挑三個，兩邊各自選，可以撞職業。</div>
+      <div class="row">
+        <button class="back" id="pickBack">← 返回</button>
+        <button class="prime" id="pickGo" disabled>確定（0/3）</button>
+      </div>
+    </div>
+    <div id="mWait" class="col hide">
+      <div class="note" style="margin:0">把這組房號給對方：</div>
+      <div id="roomCode">------</div>
+      <div class="note" id="mWaitNote">等待對手加入…</div>
+      <button class="back" id="mCancelHost">← 取消</button>
+    </div>
+  </div>
+</div>
+
+<div id="bagOv" class="overlay hide">
+  <div id="bagWrap">
+    <div id="bagFilter"></div>
+    <div id="bagCards"></div>
+    <div id="bagPanel" class="panel">
+      <div id="bagHead"><span id="bagTabs"><b class="bt on" data-tab="gear">裝備</b><b class="bt" data-tab="skill">技能</b></span><button id="bagAuto" title="全隊自動裝上最好的裝備和技能">全隊一鍵裝備</button><span id="bagHint"></span></div>
+      <div id="bagList"></div>
+      <div id="bagOrbs"></div>
+    </div>
+    <button class="back" id="bagClose">← 關閉</button>
+  </div>
+</div>
+
+<div id="setOv" class="overlay hide">
+  <div class="card panel wide">
+    <h1 style="font-size:20px;letter-spacing:4px">設定</h1>
+    <div class="sub">SETTINGS · 存在這台裝置上</div>
+    <div id="setBody"></div>
+    <button class="back" id="setClose">← 關閉</button>
+  </div>
+</div>
+
+<div id="help" class="overlay hide">
+  <div class="card panel wide">
+    <h1 style="font-size:20px;letter-spacing:4px">遊戲說明</h1>
+    <div class="sub">HOW TO PLAY</div>
+    <div id="helpBody">
+      <h3>開局</h3>
+      每一方從五個職業裡<em>挑三個</em>，兩邊各自選、可以撞職業。隊伍小，一回合要下的決定就少，
+      節奏快很多。技能掉落只會掉你這一隊用得到的，所以選什麼職業也會影響拿到什麼技能。
+
+      <h3>目標</h3>
+      讓一個單位站上正中央的王座，<em>連續守住 5 個回合</em>就獲勝（每次輪到自己回合開始時計 1，
+      王座上沒有自己人就歸零）。或者讓對方<em>三個英雄同時處於倒下狀態</em>。
+
+      <h3>倒下與復活</h3>
+      英雄的生命歸零時不會永久死亡，而是倒下，<em>下個回合就在自家營地重新站起來</em>，
+      生命回到一半、損失三成經驗，並獲得<em>兩回合 +2 移動</em>方便歸隊。裝備和等級都會保留。<br>
+      站在<em>自家營地周圍一格</em>的單位，每回合開始會回復最大生命的四分之一。
+
+      <h3>回合</h3>
+      每個單位每回合有<em>各自獨立的一次移動和一次行動</em>，順序隨你 ——
+      可以全部先走位，看完整個場面再決定誰出手，也可以打完再撤。
+      只要還沒行動，移動隨時可以取消。<br>
+      雙方都結束後是<em>魔物階段</em>，只有被驚醒（玩家走進 3 格內）的魔物會動。
+
+      <h3>升級與屬性點</h3>
+      擊殺、命中、治療都給經驗，而且<em>三格內的隊友會分到 40%</em>，所以整隊會一起成長。
+      每升一級除了固定成長，還會拿到 <em>2 點自由屬性點</em>，在背包的角色卡上分配
+      （攻擊 +1／防禦 +1／生命 +4）。<br>
+      有東西掉落或有屬性點沒分配時，背包按鈕上會出現 <em>❗</em>。
+
+      <h3>操作</h3>
+      <em>WASD</em> 或方向鍵＝平移地圖，拖曳＝旋轉視角，滾輪＝縮放，點小地圖＝跳過去。<br>
+      點自己的單位 → 藍格是可移動範圍、淡紅是威脅範圍 → 點格子移動、點敵人攻擊。
+      直接點射程外的敵人會自動走位過去。Tab 鍵輪流選還沒動的單位。<br>
+      想單人玩就按底下的 <em>AI 對手</em>，電腦會接手紅軍；隨時可以再按一次關掉改回手動。
+
+      <h3>戰鬥</h3>
+      傷害 = 攻擊 + 地形攻 − (防禦 + 地形防)，最低 1。之後再乘上：
+      <table>
+        <tr><th>條件</th><th>倍率</th></tr>
+        <tr><td>側面攻擊</td><td>×1.25</td></tr>
+        <tr><td>背後攻擊（而且不會被反擊）</td><td>×1.5</td></tr>
+        <tr><td>攻擊類型剋護甲類型</td><td>×1.5</td></tr>
+        <tr><td>暴擊（10%）</td><td>×1.5</td></tr>
+        <tr><td>從高地打低處</td><td>攻擊 +2</td></tr>
+      </table>
+      <em>剋制三角：</em>斬剋布甲、射剋輕甲、法剋重甲。<br>
+      <em>控制區域：</em>移動到敵人相鄰格時會立刻停下，所以前排擋得住路。<br>
+      被攻擊的一方若距離在自己射程內，而且不是被背擊，就會反擊。<br>
+      單位有<em>八個朝向</em>。被打到時會轉頭看向攻擊者，但<em>一回合只轉一次</em> ——
+      所以繞後偷襲只有第一下吃得到加成，之後那個方向就變成正面了。
+
+      <h3>職業</h3>
+      <table>
+        <tr><th>職業</th><th>HP</th><th>攻</th><th>防</th><th>移</th><th>射</th><th>類型</th><th>被動</th></tr>
+        <tr><td>騎士</td><td>34</td><td>11</td><td>7</td><td>4</td><td>1</td><td>斬／重甲</td><td>相鄰友軍減傷 2</td></tr>
+        <tr><td>遊俠</td><td>24</td><td>10</td><td>3</td><td>5</td><td>3</td><td>射／輕甲</td><td>山地射程 +1</td></tr>
+        <tr><td>法師</td><td>20</td><td>13</td><td>2</td><td>4</td><td>3</td><td>法／布甲</td><td>無視半防</td></tr>
+        <tr><td>牧師</td><td>24</td><td>8</td><td>4</td><td>5</td><td>3</td><td>法／輕甲</td><td>治療自己也回血</td></tr>
+        <tr><td>狂戰士</td><td>30</td><td>14</td><td>4</td><td>4</td><td>1</td><td>斬／輕甲</td><td>血越少攻越高</td></tr>
+      </table>
+      <em>Lv.5 職業進階</em>，數值大幅提升並改名。
+
+      <h3>設定</h3>
+      右上角的 <em>⚙</em>（主選單也有）可以調 UI 大小、背包每行格數、動畫速度、特效等級、
+      名牌顯示、鏡頭速度、自動結束回合、自動分解門檻等等。
+      設定<em>存在這台裝置的瀏覽器裡</em>，下次打開會記得；換一台電腦就是另一份設定。
+
+      <h3>技能</h3>
+      全遊戲共 <em>90 個技能</em>：五個職業各 15 個（每個品質三個），外加 15 個通用技能。
+      技能<em>鎖職業</em>，抽到用不上的可以分解。開局每個英雄先送一個白色主動技能。<br>
+      <em>技能欄：</em>主動技能槽在 <em>Lv.1 / 3 / 6</em> 各開一個，被動技能槽在 <em>Lv.4</em> 開。
+      打開背包切到<em>技能</em>分頁，點角色牌上的技能欄，再點技能書就裝上；<em>雙擊技能欄</em>可以卸下。<br>
+      <em>取得：</em>打怪 15% 掉技能書，寶箱也會掉（金寶箱必掉）。<br>
+      <em>換技能：</em><em>每個技能欄一回合只能換一次</em>（三個主動欄和被動欄各自算），
+      換下來的技能書會退回背包，而且<em>冷卻不會重置</em>（卸下來的技能照樣繼續冷卻）。
+      這回合換過的欄位會標上 ✓。<br>
+      <em>技能精球：</em>分解技能書會得到同品質的精球，<em>三顆可以合成一個高一階的技能</em>。<br>
+      技能的傷害和治療<em>全部是攻擊力的百分比</em>，所以升級和換裝備都會一起變強 ——
+      滑鼠移到技能上會顯示「百分比 ／ 實際數值」。同一個品質的技能總輸出是固定預算，
+      打得到越多人、每一下就越輕，所以低品質的範圍技不會壓過高品質的單體技。<br>
+      技能寫「周圍一格」時指的是<em>正方形九格</em>，不是十字。<br>
+      <em>品質：</em><span class="q0">普通</span>、<span class="q1">常見</span>、<span class="q2">稀有</span>、
+      <span class="q3">史詩</span>、<span class="q4">傳說</span>。白綠不帶狀態，藍色以上會附屬性增益，
+      紫色以上會附負面狀態，金色的才會有<em>控制效果</em>（暈眩、定身、沉默、冰凍、恐懼）。
+
+      <h3>裝備</h3>
+      裝備同樣分五個品質，數值倍率依序是 <em>0.6 / 1 / 1.4 / 2 / 2.5</em>，品質越高越容易帶詞綴。
+      打怪 25% 掉裝備（和技能書<em>獨立計算</em>，可能同時掉）。<br>
+      武器有職業限制（長弓只有遊俠拿得動、法杖只有法師和牧師能用），防具和飾品不限。
+      背包裡會註明限用職業。卸下裝備：<em>雙擊裝備欄</em>，或把它拖回下面的背包。
+      <em>每個裝備欄一回合只能換一次</em>（武器、防具、飾品各自算），換過的欄位會標上 ✓。<br>
+      懶得一件件挑的話，角色卡右上角有<em>一鍵</em>，背包上面有<em>全隊一鍵裝備</em> ——
+      會自動換上背包裡分數最高的裝備，以及品質更高的技能。<br>
+      用不到的裝備可以<em>分解成裝備精球</em>，一樣是三顆合成一個高一階的裝備。
+      設定裡也能開<em>自動分解</em>，低品質的掉落直接變精球，不進背包。<br>
+      背包上面那排<em>角色頭像</em>可以篩選 —— 點下去只留那個角色用得到的裝備和技能，卡片也會亮起來。<br>
+      線上對戰時，<em>不是自己的回合也能開背包整理</em>。
+
+      <h3>地形</h3>
+      <table>
+        <tr><th>地形</th><th>移動消耗</th><th>效果</th></tr>
+        <tr><td>道路</td><td>1</td><td>—</td></tr>
+        <tr><td>平原</td><td>1</td><td>—</td></tr>
+        <tr><td>森林</td><td>2</td><td>防禦 +2</td></tr>
+        <tr><td>山地</td><td>2</td><td>防禦 +2、攻擊 +1、高地</td></tr>
+        <tr><td>沼澤</td><td>3</td><td>防禦 −1，踏進去移動就結束</td></tr>
+        <tr><td>深水</td><td colspan="2">不可通行</td></tr>
+        <tr><td>王座</td><td>2</td><td>防禦 +2、勝利點</td></tr>
+      </table>
+
+      <h3>成長與裝備</h3>
+      打怪、開寶箱會掉裝備，分武器／防具／飾品三個欄位，全隊共用一個背包。
+      稀有裝備會帶特效：吸血、破甲、先制、反傷、疾風、守護。<br>
+      開<em>背包</em>會看到三張角色牌，每張都有頭像、經驗條、屬性點、裝備欄和技能欄。裝上去有兩種方式：
+      把裝備<em>拖到角色身上</em>，或先點一個裝備欄（會亮綠框）再點下面的裝備。
+
+      <h3>寶箱</h3>
+      <table>
+        <tr><th>種類</th><th>位置</th><th>內容</th></tr>
+        <tr><td>木寶箱</td><td>全圖鏡像散佈</td><td>裝備一件（藍紫為主），四成機率附技能書</td></tr>
+        <tr><td><b style="color:#e8c168">金寶箱</b></td><td>王座四周固定四個，另外全圖也會散幾個</td>
+            <td>裝備一件（紫金為主），<em>必定</em>附技能書</td></tr>
+      </table>
+      金寶箱有一道<em>金色光柱</em>和會轉的光環，小地圖上也是金點，遠遠就看得出來值不值得繞路。
+
+      <h3>魔物</h3>
+      魔物營地<em>越靠近王座等級越高</em>，掉落也越好 —— 想上王座，通常得先練起來。<br>
+      被打倒的魔物會在原本的營地<em>重生</em>，最少 5 回合，等級每高一級多一回合，
+      地上會有紅圈標示還剩幾回合。<br>
+      魔物只有在<em>被攻擊</em>或<em>玩家走進 3 格內</em>才會醒，而且<em>不會追出離營地 6 格以外</em> ——
+      拉開距離就能脫戰。
+      但<em>王座半徑 5 格內的營地清掉就不會再回來</em>，所以中心地帶是可以真的打乾淨的。
+
+      <h3>地圖大小</h3>
+      主選單可以選 16×16 到 64×64。地形、道路、營地、寶箱都是按比例生成的，
+      而且永遠<em>180 度旋轉對稱</em>，兩邊條件完全一樣。
+
+      <h3>素材</h3>
+      3D 模型全部出自 <em>Kay Lousberg（KayKit）</em>的 CC0 素材包，已內嵌於本檔案。
+    </div>
+    <button class="back" id="helpClose">← 關閉</button>
+  </div>
+</div>
+
+<div id="result" class="overlay hide">
+  <div class="card panel">
+    <div id="winTitle"></div>
+    <div class="sub" id="winWhy"></div>
+    <div class="col">
+      <button class="prime" id="rAgain">再玩一局</button>
+      <button id="rMenu">回主選單</button>
+    </div>
+  </div>
+</div>
+
+<div id="loading">
+  <div class="ttl">豬肉戰士</div>
+  <div class="pb"><i id="ldBar"></i></div>
+  <div class="st" id="ldTxt">載入中…</div>
+</div>
+
+<div id="toast"></div>
+
+<script>/*__THREE__*/</script>
+<script>/*__GLTF__*/</script>
+<script>/*__SKEL__*/</script>
+<script>/*__PEER__*/</script>
+<script>/*__ASSETS__*/</script>
+<script>/*__GAME__*/</script>
+</body>
+</html>

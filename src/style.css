@@ -1,0 +1,424 @@
+:root{
+  --uiscale:1; --bagcols:4;
+  --bg:#0e131c; --panel:rgba(17,22,32,.93); --line:#2b3446;
+  --gold:#e8c168; --blue:#5aa2ff; --red:#ff6b5a; --green:#5fd39a; --purple:#b7abff;
+  --txt:#e7ecf5; --dim:#8e9bb0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--txt);
+  font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;user-select:none}
+canvas{display:block}
+.hide{display:none!important}
+#hud{position:fixed;left:0;top:0;width:100%;height:100%;
+  zoom:var(--uiscale);pointer-events:none;z-index:10}
+#hud button,#hud input,#hud #mm,#hud #roster,#hud #log{pointer-events:auto}
+button{font:inherit;color:var(--txt);background:#1c2432;border:1px solid var(--line);
+  border-radius:7px;padding:7px 13px;cursor:pointer;transition:.12s;white-space:nowrap}
+button:hover:not(:disabled){background:#27324a;border-color:var(--gold);color:var(--gold)}
+button:disabled{opacity:.32;cursor:default}
+button.prime{background:linear-gradient(180deg,#c9a24f,#9c7a2f);border-color:#e8c168;color:#1a1408;font-weight:700}
+button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08c38);color:#1a1408}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  backdrop-filter:blur(6px);box-shadow:0 8px 30px #0009}
+.s0{color:var(--blue)} .s1{color:var(--red)} .s2{color:var(--purple)}
+/* 五階品質：白 綠 藍 紫 金 —— 技能和裝備共用 */
+.q0,.r0{color:#c9d2e0} .q1,.r1{color:#5fd39a} .q2,.r2{color:#5aa2ff}
+.q3,.r3{color:#c07dff} .q4,.r4{color:#e8c168}
+
+/* 頂列 */
+#topbar{position:absolute;top:10px;left:50%;transform:translateX(-50%);
+  display:flex;align-items:center;gap:14px;padding:7px 16px;white-space:nowrap;font-size:14px}
+#turnNo{color:var(--dim);font-size:13px}
+#turnWho{font-weight:700}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:1px}
+.dot.s0{background:var(--blue)} .dot.s1{background:var(--red)}
+#force{font-size:13px;font-weight:600}
+#force .mons{color:var(--dim);font-weight:400;font-size:12px}
+.holds{display:flex;gap:6px}
+.hold{font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:20px;padding:1px 9px}
+.hold b{font-weight:700}
+.hold.h0 b{color:var(--blue)} .hold.h1 b{color:var(--red)}
+.hold.on{border-color:var(--gold);background:#26200e}
+#netTag{font-size:11px;color:var(--green);border:1px solid #2f5a46;background:#12241d;
+  padding:2px 8px;border-radius:20px}
+
+/* 單位卡 */
+#unitCard{position:absolute;left:10px;top:10px;width:228px;padding:11px 13px;font-size:13px}
+#ucHead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px}
+#ucName{font-size:16px;font-weight:700}
+#ucLv{font-size:11px;color:var(--gold)}
+.bar{height:8px;border-radius:5px;background:#0a0f17;border:1px solid var(--line);overflow:hidden;margin:3px 0}
+.bar>i{display:block;height:100%;transition:width .25s}
+.bhp>i{background:linear-gradient(90deg,#3fbf70,#7ee0a3)}
+.bhp.low>i{background:linear-gradient(90deg,#c9452f,#ff7a5e)}
+.bxp>i{background:linear-gradient(90deg,#7a5fc0,#c0a6ff)}
+.lbl{display:flex;justify-content:space-between;font-size:10px;color:var(--dim);margin-bottom:5px}
+#ucStats{display:grid;grid-template-columns:1fr 1fr;gap:2px 10px;margin-top:8px}
+#ucStats div{display:flex;justify-content:space-between;color:var(--dim)}
+#ucStats b{color:var(--txt)}
+#ucType{margin-top:7px;font-size:11px;color:var(--dim)}
+.tt{color:var(--gold)}
+#ucTer{margin-top:7px;padding-top:7px;border-top:1px solid var(--line);font-size:11px;color:var(--dim)}
+.pass{margin-top:4px;color:#9fb4d8}
+#ucEquip{margin-top:7px;padding-top:7px;border-top:1px solid var(--line);font-size:11px}
+.eq{padding:2px 0;color:var(--dim)}
+.eq span{color:var(--dim);font-size:10px}
+.eq.empty{opacity:.45}
+
+/* 隊伍列 */
+#roster{position:absolute;left:10px;bottom:14px;width:170px;display:flex;flex-direction:column;gap:5px}
+.rr{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 9px;
+  cursor:pointer;transition:.12s}
+.rr:hover{border-color:var(--gold)}
+.rr.sel{border-color:var(--gold);background:#241f10}
+.rr.done{opacity:.45}
+.rr.dead{opacity:.25;text-decoration:line-through;cursor:default}
+.rn{display:flex;justify-content:space-between;font-size:12px;font-weight:600}
+.rn span{color:var(--gold);font-size:10px;font-weight:400}
+.rb{height:4px;border-radius:3px;background:#0a0f17;overflow:hidden;margin-top:4px}
+.rb i{display:block;height:100%;background:#4ecb82}
+
+/* 戰鬥預測 */
+#forecast{position:absolute;right:10px;top:10px;width:206px;padding:11px 13px}
+#forecast h4{font-size:11px;color:var(--gold);font-weight:600;margin-bottom:7px;letter-spacing:1px}
+.fcrow{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px}
+.fcrow+.fcrow{border-top:1px solid #ffffff0f}
+.fcrow span{color:var(--dim)}
+.fcrow b{font-size:17px;font-weight:700}
+.dmg{color:var(--red)} .heal{color:var(--green)} .safe{color:var(--dim);font-size:12px!important}
+#fcNote{margin-top:7px;font-size:10px;color:var(--gold);line-height:1.7}
+
+/* 小地圖 + 日誌 */
+#mmBox{position:absolute;right:10px;top:150px;padding:5px;line-height:0}
+#mm{width:150px;height:150px;image-rendering:pixelated;border-radius:5px;cursor:crosshair}
+#log{position:absolute;right:10px;bottom:14px;width:236px;max-height:190px;overflow-y:auto;
+  padding:8px 11px;font-size:11px;line-height:1.7;color:var(--dim)}
+#log::-webkit-scrollbar{width:5px}
+#log::-webkit-scrollbar-thumb{background:#33405a;border-radius:3px}
+#log .up{color:var(--gold)} #log .kill{color:#ff9c8a} #log b{color:var(--txt)}
+
+/* 底部 */
+#bottom{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:7px;
+  flex-wrap:wrap;justify-content:center;max-width:calc(96vw / var(--uiscale))}
+#actbar{position:absolute;bottom:58px;left:50%;transform:translateX(-50%);display:flex;gap:7px}
+#skills{position:absolute;bottom:106px;left:50%;transform:translateX(-50%);display:flex;gap:6px}
+.sk{display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 12px;min-width:78px;
+  pointer-events:auto}
+.sk span{font-size:12px;font-weight:600}
+.sk em{font-size:9px;color:var(--dim);font-style:normal}
+.sk.on{border-color:var(--gold);background:#2a2210;color:var(--gold)}
+.sk.lock{opacity:.3}
+.sk.q0 span{color:#c9d2e0} .sk.q1 span{color:#5fd39a} .sk.q2 span{color:#5aa2ff}
+.sk.q3 span{color:#c07dff} .sk.q4 span{color:#e8c168}
+.sk.q1{border-color:#2c5a45} .sk.q2{border-color:#2f5480}
+.sk.q3{border-color:#553a7a} .sk.q4{border-color:#7a642a}
+
+/* 名牌 */
+#tags{position:absolute;inset:0;overflow:hidden}
+.tag{position:absolute;transform:translate(-50%,-100%);text-align:center;transition:opacity .2s}
+.tag .nm{font-size:13.5px;font-weight:700;text-shadow:0 1px 3px #000,0 0 6px #000;
+  letter-spacing:.4px;margin-bottom:3px;white-space:nowrap}
+.tag.s0 .nm{color:#a9cfff} .tag.s1 .nm{color:#ffb2a6} .tag.s2 .nm{color:#cdc4ff}
+.tag .hb{position:relative;width:57px;height:6px;background:#0a0e14;border:1px solid #000;
+  border-radius:4px;overflow:hidden;margin:0 auto}
+.tag .hb i{display:block;height:100%;background:#4ecb82;transition:width .3s}
+.tag.s1 .hb i{background:#e2604c} .tag.s2 .hb i{background:#9b8cff}
+.tag .hb i.low{background:#e8a13c}
+.tag .hb b{position:absolute;left:0;top:0;height:100%;background:#7fd3ff;opacity:.85}
+.tag.done{opacity:.35}
+.float{position:absolute;transform:translate(-50%,-50%);font-weight:800;font-size:17px;
+  text-shadow:0 2px 8px #000;animation:fly 1.1s ease-out forwards;pointer-events:none;white-space:nowrap}
+.float.dmg{color:#ff8f7d} .float.crit{color:#ffd25e;font-size:21px}
+.float.heal{color:#7ce5ad} .float.up{color:var(--gold)}
+@keyframes fly{
+  0%{opacity:0;transform:translate(-50%,-30%) scale(.6)}
+  18%{opacity:1;transform:translate(-50%,-60%) scale(1.12)}
+  100%{opacity:0;transform:translate(-50%,-180%) scale(1)}
+}
+
+/* 全螢幕層 */
+.overlay{position:fixed;left:0;top:0;width:100%;height:100%;z-index:30;
+  display:flex;align-items:center;justify-content:center;zoom:var(--uiscale);
+  background:radial-gradient(ellipse at center,#18202f,#070a10)}
+.card{width:min(430px,calc(92vw / var(--uiscale)));padding:28px 32px;text-align:center}
+.card.wide{width:min(680px,calc(94vw / var(--uiscale)))}
+.card h1{font-size:29px;letter-spacing:6px;color:var(--gold);margin-bottom:5px;font-weight:800}
+.card .sub{font-size:12px;color:var(--dim);letter-spacing:2px;margin-bottom:22px}
+.card .col{display:flex;flex-direction:column;gap:9px}
+.card .col button{padding:11px}
+.row{display:flex;gap:7px}
+.row input{flex:1;background:#0a0f17;border:1px solid var(--line);border-radius:7px;
+  color:var(--txt);padding:10px;font:inherit;text-align:center;letter-spacing:4px;text-transform:uppercase}
+.row input:focus{outline:none;border-color:var(--gold)}
+#roomCode{font-size:32px;letter-spacing:10px;color:var(--gold);font-weight:800;
+  padding:13px;background:#0a0f17;border-radius:9px;border:1px solid var(--line);margin:5px 0}
+.note{font-size:12px;color:var(--dim);line-height:1.8;margin-top:6px}
+.back{margin-top:14px;font-size:13px;color:var(--dim);background:none;border:none;
+  text-decoration:underline;cursor:pointer}
+.back:hover{color:var(--gold);background:none;border:none}
+#winTitle{font-size:33px;font-weight:800;letter-spacing:8px;margin-bottom:6px}
+
+#helpBody{text-align:left;font-size:12.5px;line-height:1.95;color:#c3ccdb;max-height:calc(66vh / var(--uiscale));overflow-y:auto;padding-right:6px}
+#helpBody h3{color:var(--gold);font-size:12px;margin:15px 0 5px;letter-spacing:2px}
+#helpBody h3:first-child{margin-top:0}
+#helpBody table{width:100%;border-collapse:collapse;font-size:11.5px;margin:5px 0}
+#helpBody th,#helpBody td{padding:3px 6px;border-bottom:1px solid #ffffff10;text-align:left}
+#helpBody th{color:var(--dim);font-weight:500}
+#helpBody em{color:var(--gold);font-style:normal}
+#helpBody::-webkit-scrollbar{width:5px}
+#helpBody::-webkit-scrollbar-thumb{background:#33405a;border-radius:3px}
+
+/* 背包 */
+/* ── 背包：不遮死畫面，開著也看得到局面，而且有進場過渡 ── */
+#bagOv{background:linear-gradient(180deg,rgba(8,11,17,.22),rgba(8,11,17,.88) 60%);
+  backdrop-filter:blur(1.5px);align-items:flex-end;padding-bottom:calc(2.5vh / var(--uiscale));
+  opacity:0;transition:opacity .26s ease}
+#bagOv.on{opacity:1}
+#bagWrap{width:min(1120px,calc(96vw / var(--uiscale)));height:calc(95vh / var(--uiscale));
+  display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:8px}
+
+#bagCards{display:flex;gap:10px;justify-content:center;width:100%;flex-wrap:wrap;flex:0 0 auto}
+#bagFilter{flex:0 0 auto}
+.hcard{flex:1 1 0;min-width:170px;max-width:214px;background:var(--panel);
+  border:1px solid var(--line);border-radius:11px;padding:10px 11px;text-align:left;
+  transition:transform .16s ease,border-color .16s,box-shadow .16s;
+  opacity:0;transform:translateY(18px);animation:cardIn .34s ease forwards}
+@keyframes cardIn{to{opacity:1;transform:translateY(0)}}
+.hcard:hover{transform:translateY(-5px);border-color:var(--gold);box-shadow:0 12px 28px #000a}
+.hcard.down{opacity:.45}
+.hcard.drop{border-color:var(--green);box-shadow:0 0 0 2px var(--green),0 12px 28px #000a}
+.hc-top{display:flex;justify-content:space-between;align-items:baseline}
+.hc-name{font-size:15px;font-weight:700}
+.hc-lv{font-size:11px;color:var(--gold)}
+.hc-bar{height:5px;border-radius:3px;background:#0a0f17;overflow:hidden;margin:6px 0 5px}
+.hc-bar i{display:block;height:100%;background:linear-gradient(90deg,#3fbf70,#7ee0a3)}
+.hc-stat{font-size:11px;color:var(--dim);margin-bottom:7px}
+.hc-slots{display:flex;flex-direction:column;gap:4px}
+.eslot{border:1px solid var(--line);border-radius:7px;padding:4px 7px;cursor:pointer;
+  background:#0e141f;transition:.13s;display:grid;grid-template-columns:34px 1fr;
+  grid-template-areas:'l n' 'l s';column-gap:6px}
+.eslot:hover{border-color:var(--gold);background:#161e2c}
+.eslot.pick{border-color:var(--green);background:#10241a;box-shadow:0 0 0 1px var(--green)}
+.eslot.drop{border-color:var(--green);background:#122a1e;box-shadow:0 0 0 2px var(--green)}
+.es-l{grid-area:l;font-size:10px;color:var(--dim);align-self:center}
+.es-n{grid-area:n;font-size:12px;font-weight:600;color:var(--dim)}
+.eslot.r0 .es-n{color:#c9d2e0} .eslot.r1 .es-n{color:#5fd39a} .eslot.r2 .es-n{color:#5aa2ff}
+.eslot.r3 .es-n{color:#c07dff} .eslot.r4 .es-n{color:#e8c168}
+.es-s{grid-area:s;font-size:10px;color:var(--dim)}
+.hc-skl{display:flex;gap:4px;margin-top:8px;padding-top:7px;border-top:1px solid var(--line)}
+.bsk{flex:1;text-align:center;border:1px solid var(--line);border-radius:6px;padding:3px 2px;
+  background:#0e141f;transition:.13s}
+.bsk:hover{border-color:var(--gold)}
+.bsk b{display:block;font-size:10.5px;font-weight:600}
+.bsk em{display:block;font-size:8.5px;color:var(--dim);font-style:normal}
+.bsk.lock{opacity:.3;cursor:default}
+.bsk.pick{border-color:var(--green);background:#10241a;box-shadow:0 0 0 1px var(--green)}
+.bsk.pas{flex:0 0 62px;background:#141020}
+.bsk.q0 b{color:#c9d2e0} .bsk.q1 b{color:#5fd39a} .bsk.q2 b{color:#5aa2ff}
+.bsk.q3 b{color:#c07dff} .bsk.q4 b{color:#e8c168}
+
+#bagPanel{width:100%;padding:10px 12px;flex:0 1 auto;min-height:0;display:flex;flex-direction:column}
+#bagHead{font-size:13px;font-weight:700;color:var(--gold);margin-bottom:7px;
+  display:flex;gap:10px;align-items:baseline}
+#bagHint{font-size:11px;color:var(--dim);font-weight:400}
+#bagOv.dragging .item:not(.dragging){opacity:.5}
+.item.dragging{opacity:.4;border-color:var(--green)}
+.item{cursor:grab}
+.item:active{cursor:grabbing}
+
+/* ── 技能準心 ── */
+#reticle{position:absolute;width:52px;height:52px;transform:translate(-50%,-50%);
+  pointer-events:none;animation:ret 1.4s linear infinite}
+#reticle::before,#reticle::after{content:'';position:absolute;inset:0;border-radius:50%;
+  border:2px solid currentColor}
+#reticle::after{inset:12px;border-style:dashed;opacity:.8}
+#reticle.harm{color:#ff5a45;filter:drop-shadow(0 0 4px #ff5a4590)}
+#reticle.good{color:#4ddb96;filter:drop-shadow(0 0 4px #4ddb9690)}
+@keyframes ret{to{transform:translate(-50%,-50%) rotate(360deg)}}
+
+/* ── 主選單的地圖大小 ── */
+.sizeRow{display:flex;align-items:center;gap:8px;justify-content:center;margin-top:4px;
+  font-size:12px;color:var(--dim)}
+#mSize{display:flex;gap:4px}
+.szb{padding:4px 8px;font-size:11px;border-radius:6px}
+#bagList{text-align:left;flex:1 1 auto;min-height:0;max-height:calc(44vh / var(--uiscale));
+  overflow-y:auto;display:grid;align-content:start;
+  grid-template-columns:repeat(var(--bagcols),minmax(0,1fr));gap:7px;padding-right:4px}
+#bagList::-webkit-scrollbar{width:5px}
+#bagList::-webkit-scrollbar-thumb{background:#33405a;border-radius:3px}
+#bagList .empty{grid-column:1/-1;color:var(--dim);text-align:center;padding:26px;font-size:13px}
+.item{border:1px solid var(--line);border-radius:8px;padding:7px 10px;cursor:pointer;transition:.12s;
+  background:#131a26}
+.item:hover{border-color:var(--gold);background:#1d2433}
+.item.r1{border-color:#2c5a45} .item.r2{border-color:#2f5480}
+.item.r3{border-color:#553a7a;background:#1a1424} .item.r4{border-color:#7a642a;background:#1d1a10}
+.in{display:flex;justify-content:space-between;font-size:13px;font-weight:600}
+.item.r0 .in{color:#c9d2e0} .item.r1 .in{color:#5fd39a} .item.r2 .in{color:#5aa2ff}
+.item.r3 .in{color:#c07dff} .item.r4 .in{color:#e8c168}
+.item.q0 .in{color:#c9d2e0} .item.q1 .in{color:#5fd39a} .item.q2 .in{color:#5aa2ff}
+.item.q3 .in{color:#c07dff} .item.q4 .in{color:#e8c168}
+.item.q1{border-color:#2c5a45} .item.q2{border-color:#2f5480}
+.item.q3{border-color:#553a7a;background:#1a1424} .item.q4{border-color:#7a642a;background:#1d1a10}
+.item.book{position:relative;padding-right:52px}
+.item.book .is{color:var(--dim);font-size:10.5px;line-height:1.35}
+.item.book.bad{opacity:.4}
+.item.book .dis{position:absolute;right:8px;top:50%;transform:translateY(-50%);
+  font-size:10px;padding:3px 7px;border:1px solid var(--line);border-radius:5px;
+  background:#131a26;color:var(--dim);cursor:pointer}
+.item.book .dis:hover{border-color:#b04a3a;color:#e0857a}
+
+/* 背包分頁 */
+#bagTabs{display:flex;gap:4px}
+#bagTabs .bt{font-size:12px;font-weight:600;color:var(--dim);cursor:pointer;
+  padding:2px 10px;border:1px solid var(--line);border-radius:6px;background:#0e141f}
+#bagTabs .bt.on{color:var(--gold);border-color:var(--gold);background:#1a1610}
+
+/* 精球 */
+#bagOrbs{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px;
+  padding-top:8px;border-top:1px solid var(--line)}
+#bagOrbs .ol{font-size:11px;color:var(--dim)}
+#bagOrbs .orb{display:inline-flex;align-items:center;justify-content:center;
+  width:22px;height:22px;border-radius:50%;font-size:11px;font-weight:700;
+  border:1px solid currentColor;background:#0e141f}
+#bagOrbs .oh{font-size:10px;color:var(--dim);margin-left:2px}
+#bagOrbs .ob{font-size:10px;padding:3px 7px;border:1px solid currentColor;border-radius:5px;
+  background:#0e141f;cursor:pointer}
+#bagOrbs .ob:disabled{opacity:.3;cursor:default;color:var(--dim)}
+.in .sl{color:var(--dim);font-size:10px;font-weight:400}
+.is{font-size:11px;color:var(--dim);margin-top:2px}
+.is em{color:#9fb4d8;font-style:normal}
+
+#loading{position:fixed;inset:0;z-index:40;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;background:#080c13;gap:15px}
+#loading .ttl{font-size:22px;letter-spacing:8px;color:var(--gold);font-weight:800}
+#loading .pb{width:230px;height:4px;background:#1a222f;border-radius:2px;overflow:hidden}
+#loading .pb i{display:block;height:100%;width:0;background:var(--gold);transition:width .25s}
+#loading .st{font-size:12px;color:var(--dim);letter-spacing:2px}
+#toast{position:fixed;bottom:145px;left:50%;transform:translateX(-50%);z-index:35;
+  background:#1c2432;border:1px solid var(--gold);color:var(--gold);padding:8px 17px;
+  border-radius:8px;font-size:13px;opacity:0;transition:.3s;pointer-events:none;max-width:calc(70vw / var(--uiscale));text-align:center}
+#toast.on{opacity:1}
+
+/* ── 技能說明浮窗 ── */
+#skillTip{position:fixed;z-index:36;width:250px;padding:10px 12px;pointer-events:none;
+  background:rgba(14,19,28,.97);border:1px solid var(--gold);border-radius:9px;
+  box-shadow:0 10px 30px #000c;font-size:12px;line-height:1.7;color:#c8d2e2}
+#skillTip h5{display:flex;justify-content:space-between;align-items:baseline;
+  font-size:14px;color:var(--gold);margin-bottom:4px}
+#skillTip h5 em{font-size:10px;color:var(--dim);font-style:normal;font-weight:400}
+#skillTip p{color:var(--dim);margin-bottom:6px;font-size:11.5px}
+#skillTip .sr{display:flex;gap:6px;font-size:11.5px;padding:1px 0}
+#skillTip .sr b{color:var(--txt);font-weight:700}
+
+/* ── 等著重生的怪 ── */
+.resp{position:absolute;transform:translate(-50%,-50%);color:#ff8f7d;font-size:13px;
+  font-weight:800;text-shadow:0 1px 4px #000,0 0 8px #000;pointer-events:none}
+
+/* ── 還沒行動的單位（按結束回合時提醒）── */
+.tag.idle .nm{color:#ffd35c!important;animation:idleBlink .9s ease-in-out infinite}
+@keyframes idleBlink{50%{opacity:.35}}
+
+/* ── 背包：卸下裝備的落點 ── */
+#bagPanel.dropzone{border-color:#3d6b52}
+#bagPanel.drop{border-color:var(--green);box-shadow:0 0 0 2px var(--green)}
+.eslot[draggable]{cursor:grab}
+
+
+/* ══════════ 設定・篩選・屬性點・頭像 ══════════ */
+
+/* 右上角齒輪 */
+.gear{position:absolute;top:10px;right:12px;pointer-events:auto;
+  width:34px;height:34px;padding:0;font-size:17px;line-height:1;border-radius:9px}
+#mSet{font-size:13px}
+
+/* 背包按鈕上的驚嘆號 */
+.badge{position:absolute;top:-7px;right:-7px;font-size:12px;font-style:normal;
+  animation:bdg 1s ease-in-out infinite}
+#btnBag{position:relative}
+@keyframes bdg{0%,100%{transform:scale(1)}50%{transform:scale(1.25)}}
+
+/* 設定面板 */
+#setBody{text-align:left;max-height:calc(62vh / var(--uiscale));overflow-y:auto;padding-right:6px;margin:4px 0 10px}
+#setBody::-webkit-scrollbar{width:5px}
+#setBody::-webkit-scrollbar-thumb{background:#33405a;border-radius:3px}
+.seth{font-size:12px;color:var(--gold);font-weight:700;letter-spacing:2px;
+  margin:12px 0 5px;padding-bottom:4px;border-bottom:1px solid var(--line)}
+.seth:first-child{margin-top:0}
+.setr{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 0}
+.setl{font-size:12.5px}
+.setv{display:flex;align-items:center;gap:4px}
+.setv input[type=range]{width:120px;accent-color:var(--gold)}
+.setv em{font-size:10.5px;color:var(--dim);font-style:normal;width:38px;text-align:right}
+.spk,.stg{font-size:11px;padding:3px 9px;border-radius:6px}
+.spk.on,.stg.on{border-color:var(--gold);color:var(--gold);background:#241d0d}
+.setrst{width:100%;margin-top:14px;font-size:12px}
+
+/* 背包上方的角色篩選列 */
+#bagFilter{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap}
+.bfb{padding:5px 12px;font-size:12px;border-radius:8px}
+.bfb.pic{padding:0;width:44px;height:44px;overflow:hidden;border-radius:10px;background:#131a26}
+.bfb.pic img{width:100%;height:100%;object-fit:cover;display:block;
+  filter:saturate(.75) brightness(.92);transition:.13s}
+.bfb.pic:hover img{filter:none;transform:scale(1.06)}
+.bfb.on{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold)}
+.bfb.on img{filter:none}
+
+/* 角色卡：頭像、經驗條、被篩選時亮起 */
+.hcard.lit{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold),0 12px 28px #000a}
+.hcard.dim{opacity:.45}
+.hcard.flash{opacity:1;transform:none;animation:cflash .55s ease-out}
+@keyframes cflash{0%{box-shadow:0 0 0 3px var(--green)}100%{box-shadow:0 0 0 0 #0000}}
+.hc-face{width:26px;height:26px;border-radius:6px;object-fit:cover;
+  border:1px solid var(--line);background:#0d1220;flex:0 0 auto}
+.hc-xp{position:relative;height:11px;background:#0a0e15;border:1px solid var(--line);
+  border-radius:4px;overflow:hidden;margin-top:3px}
+.hc-xp i{display:block;height:100%;background:linear-gradient(90deg,#4a7fd0,#7db0ff)}
+.hc-xp span{position:absolute;inset:0;font-size:8.5px;line-height:9px;text-align:center;
+  color:#cfe0ff;text-shadow:0 1px 2px #000}
+
+/* 自由屬性點 */
+.hc-pts{display:flex;align-items:center;gap:3px;margin-top:6px;flex-wrap:wrap}
+.hc-pts .ptl{font-size:10px;color:var(--dim)}
+.hc-pts.has .ptl{color:var(--gold)}
+.ptb{font-size:9.5px;padding:2px 5px;border-radius:5px;line-height:1.25}
+.ptb em{font-style:normal;color:var(--dim);margin-left:3px}
+.hc-pts.has .ptb{border-color:var(--gold);color:var(--gold)}
+
+/* 被動技能欄改成圓的 */
+.bsk.pas{flex:0 0 46px;height:46px;border-radius:50%;display:flex;
+  align-items:center;justify-content:center;text-align:center;padding:2px;background:#141020}
+.bsk.pas b{font-size:9px;line-height:1.15}
+
+/* 技能類型標籤 */
+.item .kt{font-style:normal;font-size:9px;padding:1px 5px;border-radius:4px;
+  background:#243049;color:#a9b8d0;margin-left:5px;vertical-align:2px}
+.item .kt.pas{background:#3a2c55;color:#c9b6ff}
+
+/* 裝備也能分解 */
+.item.r0,.item.r1,.item.r2,.item.r3,.item.r4{position:relative;padding-right:52px}
+.item .dis{position:absolute;right:8px;top:50%;transform:translateY(-50%);
+  font-size:10px;padding:3px 7px;border-radius:5px;background:#131a26;color:var(--dim)}
+.item .dis:hover{border-color:#b04a3a;color:#e0857a;background:#241416}
+#bagOrbs .ob.scrap{color:var(--dim)}
+
+/* 選角畫面 */
+#pickWho{font-size:14px;font-weight:700;letter-spacing:2px;margin-bottom:2px}
+#pickList{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:6px 0}
+.pk{width:112px;padding:8px 6px;border-radius:10px;background:#131a26;
+  border:1px solid var(--line);cursor:pointer;transition:.13s;text-align:center}
+.pk:hover{border-color:var(--gold);transform:translateY(-3px)}
+.pk.on{border-color:var(--gold);background:#241d0d;box-shadow:0 0 0 2px var(--gold)}
+.pk img{width:72px;height:72px;object-fit:cover;border-radius:8px;display:block;margin:0 auto 5px}
+.pk .pn{font-size:13px;font-weight:700}
+.pk .pd{font-size:9.5px;color:var(--dim);line-height:1.35;margin-top:3px}
+
+/* 這回合已經換過的欄位 */
+.eslot.used,.bsk.used{opacity:.55}
+.eslot.used::after,.bsk.used::after{content:'✓';position:absolute;right:4px;top:2px;
+  font-size:9px;color:var(--gold)}
+.eslot,.bsk{position:relative}
+
+/* 一鍵裝備 */
+.hc-auto{font-size:9.5px;padding:2px 7px;border-radius:5px;margin-left:auto}
+#bagAuto{font-size:11px;padding:3px 10px;border-radius:6px}
