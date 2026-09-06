@@ -114,7 +114,10 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
 .sk span{font-size:12px;font-weight:600}
 .sk em{font-size:9px;color:var(--dim);font-style:normal}
 .sk.on{border-color:var(--gold);background:#2a2210;color:var(--gold)}
-.sk.lock{opacity:.3}
+.sk.lock{opacity:.3;cursor:default}
+/* 冷卻中／不是自己回合：看起來是關的，但還是收得到滑鼠事件（才看得到說明） */
+.sk.off{opacity:.34;cursor:default}
+.sk.off:hover{background:#1c2432;border-color:var(--line);color:var(--txt)}
 .sk.q0 span{color:#c9d2e0} .sk.q1 span{color:#5fd39a} .sk.q2 span{color:#5aa2ff}
 .sk.q3 span{color:#c07dff} .sk.q4 span{color:#e8c168}
 .sk.q1{border-color:#2c5a45} .sk.q2{border-color:#2f5480}
@@ -307,7 +310,7 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
 #toast.on{opacity:1}
 
 /* ── 技能說明浮窗 ── */
-#skillTip{position:fixed;z-index:36;width:250px;padding:10px 12px;pointer-events:none;
+#skillTip{position:fixed;z-index:60;zoom:var(--uiscale);width:250px;padding:10px 12px;pointer-events:none;
   background:rgba(14,19,28,.97);border:1px solid var(--gold);border-radius:9px;
   box-shadow:0 10px 30px #000c;font-size:12px;line-height:1.7;color:#c8d2e2}
 #skillTip h5{display:flex;justify-content:space-between;align-items:baseline;
@@ -428,6 +431,28 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
 /* 一鍵裝備 */
 .hc-auto{font-size:9.5px;padding:2px 7px;border-radius:5px;margin-left:auto}
 #bagAuto{font-size:11px;padding:3px 10px;border-radius:6px}
+
+
+/* ── 回合開始的大字提示 ── */
+#turnBanner{position:fixed;inset:0;z-index:45;display:flex;align-items:center;justify-content:center;
+  pointer-events:none;zoom:var(--uiscale)}
+#turnBanner::before{content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse at center,rgba(6,9,14,.82),rgba(6,9,14,.34) 55%,rgba(6,9,14,0) 78%);
+  animation:tbBg .28s ease forwards}
+#turnBanner.fading::before{animation:tbBgOut .5s ease forwards}
+@keyframes tbBg{from{opacity:0}to{opacity:1}}
+@keyframes tbBgOut{from{opacity:1}to{opacity:0}}
+#turnBigTxt{position:relative;font-size:64px;font-weight:800;letter-spacing:10px;
+  text-shadow:0 4px 26px #000,0 0 60px currentColor;white-space:nowrap;
+  will-change:transform,opacity}
+#turnBanner.s0 #turnBigTxt{color:#8fc0ff}
+#turnBanner.s1 #turnBigTxt{color:#ff9a8a}
+#turnBanner.s2 #turnBigTxt{color:#b9aeff;font-size:44px;letter-spacing:6px}
+#turnBanner.mine #turnBigTxt{color:var(--gold)}
+
+/* 上面面板的「輪到誰」 */
+#turnWho em{font-style:normal;font-size:10.5px;color:var(--dim);margin-left:5px}
+#turnWho.mine{color:var(--gold);font-weight:700}
 </style>
 </head>
 <body>
@@ -488,8 +513,10 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
 
   <div id="tags"></div>
   <div id="reticle" class="hide"></div>
-  <div id="skillTip" class="hide"></div>
 </div>
+
+<div id="turnBanner" class="hide"><span id="turnBigTxt"></span></div>
+<div id="skillTip" class="hide"></div>
 
 <div id="menu" class="overlay">
   <div class="card panel">
@@ -7522,7 +7549,7 @@ function tickAuras(side) {
 /* ── 回合 ── */
 
 async function startTurn(side) {
-  G.cur = side;
+  G.cur = side; G.lastSide = side;
   // 王座計數
   const holder = alive().find(u => u.x === THRONE[0] && u.y === THRONE[1] && u.side === side);
   G.hold[side] = holder ? G.hold[side] + 1 : 0;
@@ -7566,6 +7593,7 @@ async function startTurn(side) {
   if (G.over) return;
 
   dimDone(); refreshTop(); refreshRoster();
+  turnBanner();
   log(`— 第 ${G.turn} 回合・<span class="s${side}">${SIDE_N[side]}</span> —`);
   // 本機對戰換人時把鏡頭帶到該方的隊伍上，否則對方的單位在幾十格外，會以為沒輪到他
   if (mode === 'local') {
@@ -7576,7 +7604,6 @@ async function startTurn(side) {
       const cy = Math.round(list.reduce((s, u) => s + u.y, 0) / list.length);
       moveCam(cx, cy, az);
     } else flipCam(az);
-    toast(`輪到 <span class="s${side}">${SIDE_N[side]}</span>`);
   }
   const other = 1 - side;
   if (G.hold[other] > 0) toast(`${SIDE_N[other]}已佔領王座 ${G.hold[other]}/${THRONE_WIN} 回合`);
@@ -7599,6 +7626,7 @@ async function doEndTurn(broadcast) {
 
 async function monsterPhase() {
   busy = true;
+  G.cur = 2; refreshTop(); turnBanner();
   reviveMonsters();
   // 先動最早被驚動的那一群，鏡頭跟著它們跑，玩家才看得懂發生什麼事
   const mons = G.units.filter(u => u.alive && u.side === 2)
@@ -8132,12 +8160,22 @@ function drawSkillRange() {
 
 /* ── 面板 ── */
 
+// 這一回合輪到誰：線上模式講「你 / 對手」，本機模式講藍軍紅軍
+function turnLabel() {
+  if (G.cur === 2) return '魔物回合';
+  if (mode === 'online') return G.cur === myTeam ? '你的回合' : '對手回合';
+  return SIDE_N[G.cur] + '回合';
+}
+const myTurnNow = () => G.cur < 2 && (mode !== 'online' || G.cur === myTeam);
+// 魔物階段時 G.cur 是 2，名冊和背包還是要顯示剛剛那一方的東西
+const playerSide = () => (G.cur < 2 ? G.cur : (G.lastSide || 0));
+
 function refreshTop() {
   $('turnNo').textContent = '第 ' + G.turn + ' 回合';
   const w = $('turnWho');
-  w.className = 's' + G.cur;
-  w.innerHTML = `<i class="dot s${G.cur}"></i>${SIDE_N[G.cur]}` +
-    (mode === 'online' ? (G.cur === myTeam ? '（你）' : '（對手）') : '');
+  w.className = 's' + G.cur + (myTurnNow() ? ' mine' : '');
+  w.innerHTML = `<i class="dot s${G.cur}"></i>${turnLabel()}` +
+    (mode === 'online' ? `<em>${SIDE_N[G.cur]}</em>` : '');
   const c = s => alive().filter(u => u.side === s).length;
   $('force').innerHTML = `<span class="s0">${c(0)}</span> : <span class="s1">${c(1)}</span>` +
     `<span class="mons">　魔物 ${c(2)}</span>`;
@@ -8146,13 +8184,56 @@ function refreshTop() {
     el.textContent = G.hold[s];
     el.parentNode.classList.toggle('on', G.hold[s] > 0);
   }
-  $('btnEnd').disabled = !canAct();
+  // 不是自己的回合就別掛「結束回合」四個字，免得以為按得動
+  const eb = $('btnEnd');
+  eb.disabled = !canAct();
+  eb.textContent = canAct() ? '結束回合'
+    : G.cur === 2 ? '魔物行動中…'
+    : mode === 'online' ? '等待對手…' : '對方回合';
+  eb.classList.toggle('prime', canAct());
   refreshBadge();
+}
+
+/* ── 回合開始的大字提示 ──
+   先在畫面正中央淡入一個大字，停一下，再縮小飛到上面的面板上，
+   剛好落在「現在輪到誰」那一格。 */
+let bannerJob = 0;
+function turnBanner() {
+  const el = $('turnBanner'), txt = $('turnBigTxt');
+  const job = ++bannerJob;
+  const mine = myTurnNow();
+  txt.textContent = turnLabel();
+  el.className = 'show s' + G.cur + (mine ? ' mine' : '');
+  txt.style.transition = 'none';
+  txt.style.transform = 'translate(0,0) scale(1)';
+  txt.style.opacity = '0';
+
+  // 用強制重排而不是 requestAnimationFrame：分頁被切到背景時 rAF 會停擺，
+  // 那樣這個提示就永遠停在 opacity 0
+  void txt.offsetWidth;
+  txt.style.transition = 'opacity .28s ease';
+  txt.style.opacity = '1';
+
+  // 停留之後往上面的面板收
+  setTimeout(() => {
+    if (job !== bannerJob) return;
+    const from = txt.getBoundingClientRect();
+    const to = $('turnWho').getBoundingClientRect();
+    if (!from.width || !to.width) { el.className = 'hide'; return; }
+    const k = Math.max(0.12, to.height / from.height);
+    const dx = (to.left + to.width / 2) - (from.left + from.width / 2);
+    const dy = (to.top + to.height / 2) - (from.top + from.height / 2);
+    txt.style.transition = 'transform .55s cubic-bezier(.55,0,.25,1), opacity .55s ease';
+    txt.style.transform = `translate(${dx}px,${dy}px) scale(${k})`;
+    txt.style.opacity = '0';
+    el.classList.add('fading');
+    setTimeout(() => { if (job === bannerJob) el.className = 'hide'; }, 560);
+  }, mine ? 900 : 620);
 }
 
 function refreshRoster() {
   const box = $('roster');
-  const side = mode === 'online' ? myTeam : G.cur;
+  const side = mode === 'online' ? myTeam : playerSide();
   const list = G.units.filter(u => u.side === side);
   box.innerHTML = '';
   for (const u of list) {
@@ -8230,7 +8311,8 @@ function buildSkillBar(u) {
     const id = u.act[i];
     if (!id) {
       const e = document.createElement('button');
-      e.className = 'sk lock'; e.disabled = true;
+      e.className = 'sk lock';
+      e.title = i < actSlots(u) ? '這個技能欄是空的，去背包裝一個技能' : '第 ' + (i + 1) + ' 個技能欄要 Lv.' + (i === 1 ? 3 : 6) + ' 才會開';
       e.innerHTML = i < actSlots(u) ? '<span>空槽</span><em>去背包裝</em>' : '<span>未解鎖</span><em>Lv' + (i === 1 ? 3 : 6) + '</em>';
       bar.appendChild(e); continue;
     }
@@ -8242,8 +8324,12 @@ function buildSkillBar(u) {
     b.innerHTML = `<span>${s.n}</span><em>${cd > 0 ? cd + ' 回合' : 'CD' + s.cd}</em>`;
     b.onpointerenter = () => showSkillTip(u, id, b);
     b.onpointerleave = hideSkillTip;
-    b.disabled = cd > 0 || u.acted || !canAct() || !canSkillU(u);
+    // 用 class 而不是 disabled：disabled 的按鈕在瀏覽器裡收不到滑鼠事件，
+    // 那樣冷卻中或不是自己回合的時候就看不到技能說明了
+    const off = cd > 0 || u.acted || !canAct() || !canSkillU(u);
+    if (off) b.classList.add('off');
     b.onclick = () => {
+      if (off) return;
       if (skillMode === id) { skillMode = null; drawRanges(); buildSkillBar(u); return; }
       skillMode = id; phase = 'skill'; drawRanges(); buildSkillBar(u);
       toast(s.n + '：' + s.d);
@@ -8387,7 +8473,7 @@ let bagSlot = null;      // 目前選中的裝備欄 {uid, slot}
 let bagDrag = null;      // 正在從背包拖出來的裝備
 let dragOff = null;      // 正在從角色身上拖下來的裝備 {uid, slot}
 
-const bagSide = () => (mode === 'online' ? myTeam : G.cur);
+const bagSide = () => (mode === 'online' ? myTeam : playerSide());
 
 // 線上模式自己的隊伍隨時都能整理；本機模式輪到誰才整理誰
 const canManage = () => (mode === 'online' ? !G.over : canAct());
@@ -8610,6 +8696,11 @@ function buildCard(u) {
       renderBag();
     };
     e.ondblclick = ev => { ev.stopPropagation(); doSetSkill(u, sl, 0); };
+    const id = sl === 'p' ? u.pas : u.act[sl];
+    if (id) {
+      e.onpointerenter = () => showSkillTip(u, id, e);
+      e.onpointerleave = hideSkillTip;
+    }
   });
 
   // 拖曳落點：整張卡都收，欄位型別對不上就不給綠框
@@ -8870,14 +8961,15 @@ function applyEquip(a) {
   const it = G.bag[u.side].find(x => x.iid === a.iid);
   if (!it) return;
   equip(u, it);
-  u.swapEq[it.slot] = 1;
+  u.swapEq[it.slot] = 1;   // 只有裝上去才算用掉這一格的機會
   bagSlot = null;
   afterBagChange(u);
 }
 
+// 卸下不算一次換裝：把那一格的次數還回去，這回合還能重新裝一件
 function doUnequip(u, slot) {
   if (!u.equip[slot]) return;
-  if (!canSwap(u, 'eq', slot)) return;
+  if (!canManage()) { toast(mode === 'online' ? '這局已經結束了' : '現在不是你的回合'); return; }
   const a = { kind: 'unequip', uid: u.id, slot };
   sendAct(a); applyUnequip(a);
 }
@@ -8886,7 +8978,7 @@ function applyUnequip(a) {
   if (!u || !u.equip[a.slot]) return;
   const it = u.equip[a.slot];
   unequip(u, a.slot);
-  u.swapEq[a.slot] = 1;
+  u.swapEq[a.slot] = 0;
   log(`<b>${nameOf(u)}</b> 卸下了 ${itemName(it)}`);
   bagSlot = null;
   afterBagChange(u);
@@ -8894,7 +8986,9 @@ function applyUnequip(a) {
 
 function doSetSkill(u, slot, bid, quiet) {
   if (!u || !isHero(u)) return false;
-  if (!canSwap(u, 'sk', slot, quiet)) return false;
+  // 卸下（bid = 0）不算一次
+  if (bid) { if (!canSwap(u, 'sk', slot, quiet)) return false; }
+  else if (!canManage()) { if (!quiet) toast('現在不是你的回合'); return false; }
   const a = { kind: 'skset', uid: u.id, slot, bid: bid || 0 };
   sendAct(a); applySetSkill(a);
   return true;
@@ -8915,7 +9009,7 @@ function applySetSkill(a) {
   }
   // 換下來的技能退回背包，冷卻不重置（u.cds 照 id 記著，繼續走）
   if (old) G.books[side].push({ bid: ++bookSeq, id: old });
-  u.swapSk[a.slot] = 1;
+  u.swapSk[a.slot] = a.bid ? 1 : 0;   // 卸下等於把次數還回去
   bagSkSlot = null;
   if (sel) buildSkillBar(sel);
   afterBagChange(u);

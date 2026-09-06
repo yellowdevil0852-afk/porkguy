@@ -1107,7 +1107,7 @@ function tickAuras(side) {
 /* ── 回合 ── */
 
 async function startTurn(side) {
-  G.cur = side;
+  G.cur = side; G.lastSide = side;
   // 王座計數
   const holder = alive().find(u => u.x === THRONE[0] && u.y === THRONE[1] && u.side === side);
   G.hold[side] = holder ? G.hold[side] + 1 : 0;
@@ -1151,6 +1151,7 @@ async function startTurn(side) {
   if (G.over) return;
 
   dimDone(); refreshTop(); refreshRoster();
+  turnBanner();
   log(`— 第 ${G.turn} 回合・<span class="s${side}">${SIDE_N[side]}</span> —`);
   // 本機對戰換人時把鏡頭帶到該方的隊伍上，否則對方的單位在幾十格外，會以為沒輪到他
   if (mode === 'local') {
@@ -1161,7 +1162,6 @@ async function startTurn(side) {
       const cy = Math.round(list.reduce((s, u) => s + u.y, 0) / list.length);
       moveCam(cx, cy, az);
     } else flipCam(az);
-    toast(`輪到 <span class="s${side}">${SIDE_N[side]}</span>`);
   }
   const other = 1 - side;
   if (G.hold[other] > 0) toast(`${SIDE_N[other]}已佔領王座 ${G.hold[other]}/${THRONE_WIN} 回合`);
@@ -1184,6 +1184,7 @@ async function doEndTurn(broadcast) {
 
 async function monsterPhase() {
   busy = true;
+  G.cur = 2; refreshTop(); turnBanner();
   reviveMonsters();
   // 先動最早被驚動的那一群，鏡頭跟著它們跑，玩家才看得懂發生什麼事
   const mons = G.units.filter(u => u.alive && u.side === 2)

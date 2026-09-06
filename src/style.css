@@ -108,7 +108,10 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
 .sk span{font-size:12px;font-weight:600}
 .sk em{font-size:9px;color:var(--dim);font-style:normal}
 .sk.on{border-color:var(--gold);background:#2a2210;color:var(--gold)}
-.sk.lock{opacity:.3}
+.sk.lock{opacity:.3;cursor:default}
+/* 冷卻中／不是自己回合：看起來是關的，但還是收得到滑鼠事件（才看得到說明） */
+.sk.off{opacity:.34;cursor:default}
+.sk.off:hover{background:#1c2432;border-color:var(--line);color:var(--txt)}
 .sk.q0 span{color:#c9d2e0} .sk.q1 span{color:#5fd39a} .sk.q2 span{color:#5aa2ff}
 .sk.q3 span{color:#c07dff} .sk.q4 span{color:#e8c168}
 .sk.q1{border-color:#2c5a45} .sk.q2{border-color:#2f5480}
@@ -301,7 +304,7 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
 #toast.on{opacity:1}
 
 /* ── 技能說明浮窗 ── */
-#skillTip{position:fixed;z-index:36;width:250px;padding:10px 12px;pointer-events:none;
+#skillTip{position:fixed;z-index:60;zoom:var(--uiscale);width:250px;padding:10px 12px;pointer-events:none;
   background:rgba(14,19,28,.97);border:1px solid var(--gold);border-radius:9px;
   box-shadow:0 10px 30px #000c;font-size:12px;line-height:1.7;color:#c8d2e2}
 #skillTip h5{display:flex;justify-content:space-between;align-items:baseline;
@@ -422,3 +425,25 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
 /* 一鍵裝備 */
 .hc-auto{font-size:9.5px;padding:2px 7px;border-radius:5px;margin-left:auto}
 #bagAuto{font-size:11px;padding:3px 10px;border-radius:6px}
+
+
+/* ── 回合開始的大字提示 ── */
+#turnBanner{position:fixed;inset:0;z-index:45;display:flex;align-items:center;justify-content:center;
+  pointer-events:none;zoom:var(--uiscale)}
+#turnBanner::before{content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse at center,rgba(6,9,14,.82),rgba(6,9,14,.34) 55%,rgba(6,9,14,0) 78%);
+  animation:tbBg .28s ease forwards}
+#turnBanner.fading::before{animation:tbBgOut .5s ease forwards}
+@keyframes tbBg{from{opacity:0}to{opacity:1}}
+@keyframes tbBgOut{from{opacity:1}to{opacity:0}}
+#turnBigTxt{position:relative;font-size:64px;font-weight:800;letter-spacing:10px;
+  text-shadow:0 4px 26px #000,0 0 60px currentColor;white-space:nowrap;
+  will-change:transform,opacity}
+#turnBanner.s0 #turnBigTxt{color:#8fc0ff}
+#turnBanner.s1 #turnBigTxt{color:#ff9a8a}
+#turnBanner.s2 #turnBigTxt{color:#b9aeff;font-size:44px;letter-spacing:6px}
+#turnBanner.mine #turnBigTxt{color:var(--gold)}
+
+/* 上面面板的「輪到誰」 */
+#turnWho em{font-style:normal;font-size:10.5px;color:var(--dim);margin-left:5px}
+#turnWho.mine{color:var(--gold);font-weight:700}
