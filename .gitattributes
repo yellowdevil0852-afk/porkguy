@@ -2,3 +2,5 @@
 *.glb binary
 *.png binary
 *.html text eol=lf
+*.bat text eol=crlf
+*.ps1 text eol=crlf

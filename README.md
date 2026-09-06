@@ -31,13 +31,23 @@ node build.js
 
 產出 `porkguy.html`（單一檔案約 6.5 MB）和一個把 GitHub Pages 導到它的 `index.html`。
 
-改完程式要讓線上的網址跟著更新，就是三步：
+改完程式之後要讓線上的網址跟著更新，**雙擊 `update.bat`** 就好 —— 它會依序做
+重新建置 → `git add` → `git commit`（會問你這次改了什麼）→ `git push`，
+中間哪一步失敗都會停下來並告訴你原因。
 
-```bash
+想自己打指令的話（注意 **Windows PowerShell 不支援 `&&`**）：
+
+```powershell
 node build.js
 git add -A
 git commit -m "改了什麼"
 git push
+```
+
+Git Bash 或 macOS/Linux 才可以串起來寫：
+
+```bash
+node build.js && git add -A && git commit -m "改了什麼" && git push
 ```
 
 推上去之後 GitHub Pages 大概 30 秒到一分鐘會自動重新發佈，重新整理網頁就是新版了。
