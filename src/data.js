@@ -7,17 +7,24 @@ const SIZES = [16, 24, 32, 48, 64];      // 可選的地圖大小
 let THRONE = [13, 13];                   // 正中央，setSize() 會重算
 const THRONE_WIN = 5;                    // 連續佔領幾回合獲勝
 const AGGRO = 3;                         // 怪物驚醒距離
-const LEASH = 6;                         // 怪物離營地最遠追多少格
+const LEASH = 8;                         // 怪物離營地最遠追多少格
 const REVIVE_TURNS = 1;                  // 英雄倒下後幾回合在營地復活
 const REVIVE_DASH = 2;                   // 復活後兩回合的額外移動力
 const CAMP_HEAL = 0.25;                  // 站在營地周圍一格，每回合回復最大生命的幾成
-const MON_LV = { 1: 1, 2: 3, 3: 5 };     // 怪群等級（依營地離王座的遠近）
+// 怪群等級（依營地離王座的遠近）。英雄封頂 Lv10，這裡拉高到 7，
+// 不然王座圈的怪到了後期只是站著的經驗值，打不痛也死不了人。
+const MON_LV = { 1: 1, 2: 4, 3: 7 };
 const MON_REVIVE_BASE = 5;               // 怪物重生的底線回合數，之後每一等 +1
 const NO_REVIVE_R = 5;                   // 王座半徑幾格內的怪群不復活
 const CRIT = 0.10, CRIT_MULT = 1.5;
 const FLANK = { front: 1, side: 1.25, back: 1.5 };
 const COUNTER_TRI = 1.5;                 // 攻擊類型剋護甲類型的倍率
 const HIGH_GROUND = 2;                   // 高處往低處打的加成
+// 減傷曲線常數：防禦等於這個數字時，傷害剛好減半（傷害 = 攻擊 × K/(K+防禦)）。
+// 取代舊的「攻擊 − 防禦」線性扣減 —— 那個公式在數值拉開後防禦方會變成
+// 「怎麼打都只剩地板值 1」，攻防差距一大，戰鬥就從「打幾下」退化成「碰一下就死」。
+// 減傷曲線讓防禦永遠有效但永遠不會把傷害壓到底，全等級的交手節奏才會穩定在 3～5 下。
+const MIT_K = 18;
 
 // ── 地形 ──
 const TER = {

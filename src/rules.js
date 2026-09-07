@@ -102,15 +102,18 @@ function dmgCalc(a, d, opt) {
   if (at.high && !dt.high) A += HIGH_GROUND;
   else if (dt.high && !at.high) A -= 1;
 
-  let D = defOf(d) + (opt.ignoreTer ? 0 : dt.def);
+  let D = defOf(d) + (opt.ignoreTer ? 0 : dt.def) + guardOf(d);
   if (a.cls === 'MG' || hasAffix(a, 'rend')) D = Math.floor(D / 2);
+  D = Math.max(0, D);
 
-  let v = Math.max(1, A - D);
-  if (BEATS[dmgType(a)] === armType(d)) v = Math.round(v * COUNTER_TRI);
-  v = Math.round(v * (opt.noFlank ? 1 : flankMult(a, d)));
-  if (opt.mult) v = Math.round(v * opt.mult);
-  if (opt.crit) v = Math.round(v * CRIT_MULT);
-  v -= guardOf(d);
+  // 減傷曲線，見 data.js 的 MIT_K：防禦拉高傷害會越來越低，但不會像舊公式
+  // 「攻擊 − 防禦」那樣一路砍到地板值 1，全等級的交手節奏才穩得住。
+  let v = A * MIT_K / (MIT_K + D);
+  if (BEATS[dmgType(a)] === armType(d)) v *= COUNTER_TRI;
+  v *= (opt.noFlank ? 1 : flankMult(a, d));
+  if (opt.mult) v *= opt.mult;
+  if (opt.crit) v *= CRIT_MULT;
+  v = Math.round(v);
   if (pasOf(d, 'rangedRes') && dmgType(a) !== 'melee') v = Math.round(v * (1 - pasOf(d, 'rangedRes')));
   if (opt.counter && pasOf(a, 'counterPct')) v = Math.round(v * (1 + pasOf(a, 'counterPct')));
   return Math.max(1, v);
@@ -247,6 +250,18 @@ function mkMon(kind, x, y, camp) {
   u.hp = mhpOf(u);
   G.units.push(u);
   return u;
+}
+
+// 驚動一隻，整營地一起醒過來 —— 原本是一隻一隻叫醒，玩家可以站在
+// 邊緣把一整群怪一隻隻挑掉，怪群完全不成群。現在攻擊或路過驚動任何一隻，
+// 同一個營地的怪會一起圍上來，戰鬥才是「打一群」而不是「打一串單體」。
+function wakeCamp(m) {
+  if (m.side !== 2 || m.camp === undefined) return;
+  for (const o of G.units) {
+    if (o.side === 2 && o.camp === m.camp && o.alive && !o.awake) {
+      o.awake = true; o.wokeAt = ++wakeSeq;
+    }
+  }
 }
 
 // 怪物陣亡後在自己的營地重生；離王座越近的怪群等級越高、復活越慢，
@@ -485,8 +500,8 @@ async function strike(a, d, opt) {
 
   await onHurtPassives(a, d, real, crit, ranged || t === 'magic');
 
-  // 被打就結仇：沒醒的怪立刻醒過來
-  if (d.side === 2 && !d.awake && d.alive) { d.awake = true; d.wokeAt = ++wakeSeq; }
+  // 被打就結仇：整個營地一起醒過來
+  if (d.side === 2 && d.alive) wakeCamp(d);
 
   // 被打會轉頭看向攻擊者，但一回合只轉一次
   if (d.alive && d.hp > 0 && !d.turned) { faceTile(d, a.x, a.y); d.turned = true; }
@@ -544,6 +559,13 @@ async function die(u, killer) {
     u.down = REVIVE_TURNS;
     u.exp = Math.floor(u.exp * 0.7);
     log(`<span class="kill">${SIDE_N[u.side]}的${nameOf(u)} 倒下了</span>（${REVIVE_TURNS} 回合後在營地復活）`);
+    // 「殲滅敵軍」只在敵方英雄親手打完最後一擊才算數。怪群現在會整營地圍
+    // 上來，一次把三個人都放倒完全可能發生 —— 但那只是回合結束前的重傷，
+    // 下一回合照樣在營地站起來，不該因為撞到一群怪就直接輸掉整場比賽。
+    if (killer && isHero(killer) && killer.side !== u.side &&
+        !alive().some(o => o.side === u.side && isHero(o))) {
+      endGame(killer.side, '殲滅敵軍');
+    }
   } else {
     const c = CAMPS[u.camp];
     if (c && c.revive) u.down = MON_REVIVE_BASE + (u.lv - 1);
@@ -693,6 +715,8 @@ async function hit(u, t, s, opt) {
   updTag(t);
   afterDamage(u, t, real);
   await onHurtPassives(u, t, real, crit, dmgType(u) !== 'melee');
+  // 技能傷害原本沒有結仇，法師一顆火球把整群怪炸醒不了一個 —— 補上跟普攻一樣的規則
+  if (t.side === 2 && t.alive) wakeCamp(t);
 
   for (const e of (s.st || [])) addSt(t, u, e);
   const ae = pasOf(u, 'aoeDebuff');
@@ -1194,8 +1218,7 @@ async function monsterPhase() {
     if (!m.alive || G.over) continue;
     if (!m.awake) {
       if (!alive().some(u => u.side !== 2 && dist(u, m) <= AGGRO)) continue;
-      m.awake = true;
-      m.wokeAt = ++wakeSeq;
+      wakeCamp(m);
       play(m, A.cheer, true);
       await wait(180);
     }
@@ -1264,13 +1287,10 @@ async function mAttack(m, tgt) {
 
 /* ── 勝負 ── */
 
-function checkVictory() {
-  if (G.over) return true;
-  for (const s of [0, 1]) {
-    if (!alive().some(u => u.side === s)) { endGame(1 - s, '殲滅敵軍'); return true; }
-  }
-  return false;
-}
+// 「殲滅敵軍」的判定移到 die() 裡即時做（見那邊的註解）——
+// 只有敵方英雄親手完成團滅才算數，怪物打趴全隊不算。
+// 這裡留著給呼叫端一個「遊戲是不是已經結束了」的統一出口。
+function checkVictory() { return !!G.over; }
 function endGame(side, why) {
   G.over = { side, why };
   clearOverlay(); hideCard(); hideForecast();
