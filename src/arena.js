@@ -1,38 +1,75 @@
 /* ══════════════ 競技場 ══════════════
    每 ARENA_INTERVAL 回合結束時，雙方所有還站著的英雄被強制傳送到一個
-   固定 16×16 的小競技場，打「先拿到 ARENA_WINS 分」的三戰制。
+   16×16 的小競技場，打**一場**——先把對方全部打倒的一方獲勝就結束
+   （不是同一輪三戰兩勝；那個規則以後可能會再改，現在先簡單一輪定勝負）。
    結束後所有人回到原本在主戰場的位置，血量統一恢復到上限的一半——
    這樣進競技場才有風險，不是純粹白拿獎勵的小遊戲。
-   場上有一次性的增益地塊，走過去就撿到、用掉就消失，撿完當輪不會再長出來。 */
+   場上有一次性的增益地塊，走過去就撿到、用掉就消失。地形跟增益地塊
+   的位置每次都重新隨機，但兩邊用同一個種子算，畫面會完全一致。 */
 
 const ARENA_INTERVAL = 5;    // 每幾回合結束強制開一次
 const ARENA_SIZE = 16;
-const ARENA_WINS = 3;        // 先拿到幾分獲勝
 const ARENA_GOLD_WIN = 40, ARENA_GOLD_LOSE = 10;
 
-// 固定佈局，180° 對稱，不用亂數 —— 競技場的地形不需要每次都不一樣，
-// 重點在雙方公平，用固定佈局最不容易出同步或平衡的意外
-let ARENA_BUFFS = {};   // key 'x,y' -> 'power' | 'charge'，撿掉就從這裡刪掉
+// 四種一次性增益，撿到立刻生效、從地上消失
+const ARENA_BUFF_KINDS = ['power', 'charge', 'guard', 'haste'];
+let ARENA_BUFFS = {};   // key 'x,y' -> 種類
 
 function arenaSpawns() {
   return { 0: [[1, 14], [2, 14], [1, 13]], 1: [[14, 1], [13, 1], [14, 2]] };
 }
 
+// 地形跟增益地塊的位置都用亂數決定，但種子固定用「主局種子 × 這次進場的回合數」，
+// 兩邊各自算出來的結果保證一致，不需要多送一個網路訊息去同步佈局
 function genArenaMap() {
   const n = ARENA_SIZE;
   W = H = n; THRONE = [n >> 1, n >> 1]; CAMP = [[1, 14], [14, 1]];
   MAP = [];
   for (let y = 0; y < n; y++) { MAP[y] = []; for (let x = 0; x < n; x++) MAP[y][x] = 'P'; }
   const mirror = (x, y) => [n - 1 - x, n - 1 - y];
-  const put = (x, y, t) => { MAP[y][x] = t; const [mx, my] = mirror(x, y); MAP[my][mx] = t; };
-  // 中央一叢障礙卡位置，兩側各留一點森林
-  put(6, 6, 'M'); put(7, 7, 'M'); put(6, 7, 'F'); put(7, 6, 'F');
-  put(2, 8, 'F'); put(13, 7, 'F');
+  const put = (x, y, t) => {
+    if (!inBoard(x, y)) return;
+    MAP[y][x] = t;
+    const [mx, my] = mirror(x, y);
+    if (inBoard(mx, my)) MAP[my][mx] = t;
+  };
+  const near = (x, y, cx, cy, r) => Math.abs(x - cx) + Math.abs(y - cy) <= r;
+  const nearSpawn = (x, y) => near(x, y, 1, 14, 2) || near(x, y, 14, 1, 2);
+
+  const arRng = mulberry32((G.seed ^ (G.turn * 0x1000193)) >>> 0);
+  // 石頭：純障礙物——不可通行、擋視線、沒有任何加成，跟主地圖的山地／森林分開處理
+  const rockCount = 4 + Math.floor(arRng() * 4);
+  for (let i = 0; i < rockCount; i++) {
+    const x = 2 + Math.floor(arRng() * (n - 4)), y = 2 + Math.floor(arRng() * (n - 4));
+    if (nearSpawn(x, y)) continue;
+    put(x, y, 'K');
+    // 偶爾黏一格出來，讓障礙看起來像一叢石頭而不是孤零零一格
+    if (arRng() < 0.4) {
+      const [dx, dy] = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(arRng() * 4)];
+      if (!nearSpawn(x + dx, y + dy)) put(x + dx, y + dy, 'K');
+    }
+  }
+  // 地形變化：森林／山地／沼澤照舊可以走，只是帶著各自的加成與代價，每次隨機
+  const terrainCount = 5 + Math.floor(arRng() * 5);
+  const varietyTer = ['F', 'F', 'M', 'S'];
+  for (let i = 0; i < terrainCount; i++) {
+    const x = 2 + Math.floor(arRng() * (n - 4)), y = 2 + Math.floor(arRng() * (n - 4));
+    if (nearSpawn(x, y) || MAP[y][x] !== 'P') continue;
+    put(x, y, varietyTer[Math.floor(arRng() * varietyTer.length)]);
+  }
+
   CAMPS = []; CHESTS = []; TRAPS = [];
   ARENA_BUFFS = {};
-  const setBuff = (x, y, kind) => { ARENA_BUFFS[x + ',' + y] = kind; const [mx, my] = mirror(x, y); ARENA_BUFFS[mx + ',' + my] = kind; };
-  setBuff(4, 4, 'power');
-  setBuff(4, 11, 'charge');
+  // 四種增益各放一個，盡量分散、避開出生角落和已經是障礙物的格子
+  const spots = [];
+  let guard = 0;
+  while (spots.length < ARENA_BUFF_KINDS.length && guard++ < 300) {
+    const x = 2 + Math.floor(arRng() * (n - 4)), y = 2 + Math.floor(arRng() * (n - 4));
+    if (nearSpawn(x, y) || MAP[y][x] !== 'P') continue;
+    if (spots.some(s => Math.abs(s[0] - x) + Math.abs(s[1] - y) < 3)) continue;
+    spots.push([x, y]);
+  }
+  ARENA_BUFF_KINDS.forEach((k, i) => { if (spots[i]) ARENA_BUFFS[spots[i][0] + ',' + spots[i][1]] = k; });
 }
 
 const arenaUnits = side => (G.arena ? G.arena.participants.map(byId).filter(u => u && u.side === side) : []);
@@ -50,8 +87,9 @@ async function enterArena() {
     return;
   }
 
-  toast('雙方被傳送到競技場！先拿到 ' + ARENA_WINS + ' 分獲勝');
-  log('<b class="up">── 競技場開打：先拿到 ' + ARENA_WINS + ' 分獲勝 ──</b>');
+  toast('雙方被傳送到競技場！');
+  log('<b class="up">── 競技場開打 ──</b>');
+  arenaBanner();
 
   const saved = {
     seed: G.seed, w: W, heroPos: {},
@@ -76,13 +114,14 @@ async function enterArena() {
     buildUnitView(u); makeTag(u);
     participants.push(u.id);
   }
-  // 沒被傳送過去的（怪物、沒參賽的英雄）整批凍結，見上面 alive()/unitAt() 的註解
+  // 沒被傳送過去的（怪物、沒參賽的英雄）整批凍結，見 alive()/unitAt() 的註解
   for (const u of G.units) u.paused = !participants.includes(u.id);
 
-  G.arena = { wins: [0, 0], round: 1, saved, participants };
+  G.arena = { saved, participants };
   refreshArenaBuffTiles();
   camAz = Math.PI * 0.25; camDist = 22;
-  camTarget.set(wx(7), 0, wz(8));
+  camJob++;                          // 作廢任何還在飛的鏡頭補間（例如剛才 startTurn() 那個沒等的），
+  camTarget.set(wx(7), 0, wz(8));    // 不然它跑完會把鏡頭拉回舊地圖的座標，畫面對不上新的小競技場
   updCam();
   refreshTop(); refreshRoster(); drawMinimap();
   arenaStartTurn(0);
@@ -103,13 +142,13 @@ function arenaStartTurn(side) {
 }
 
 // 只有 doEndTurn() 判斷 G.arena 存在時才會走到這裡——競技場裡沒有魔物階段，
-// 純粹雙方輪流，直到某一輪打到只剩一邊站著（在 arenaDie() 裡反應式判定）
+// 純粹雙方輪流，直到一輪打到只剩一邊站著（在 arenaDie() 裡反應式判定）
 async function arenaEndTurn() {
   arenaStartTurn(G.cur === 0 ? 1 : 0);
 }
 
 // 這裡跟主賽事的 die() 分開走：不掉經驗、不進倒下復活、不觸發殲滅判定，
-// 純粹只是「這一輪淘汰」，資源全部留給正式比賽用
+// 純粹只是「這場淘汰」，資源全部留給正式比賽用
 async function arenaDie(u) {
   u.alive = false;
   log(`<span class="kill">${nameOf(u)} 在競技場倒下了</span>`);
@@ -125,41 +164,11 @@ async function arenaDie(u) {
   }
   removeView(u);
   refreshRoster();
-  if (!arenaAliveSide(u.side)) await arenaRoundOver(1 - u.side);
-}
-
-async function arenaRoundOver(winnerSide) {
-  G.arena.wins[winnerSide]++;
-  log(`<b class="s${winnerSide}">${SIDE_N[winnerSide]}</b> 贏得競技場第 ${G.arena.round} 輪（${G.arena.wins[0]}：${G.arena.wins[1]}）`);
-  toast(`<b class="s${winnerSide}">${SIDE_N[winnerSide]}</b> 贏得第 ${G.arena.round} 輪！`);
-  if (G.arena.wins[winnerSide] >= ARENA_WINS) { await wait(500); await exitArena(winnerSide); return; }
-  await wait(600);
-  resetArenaRound();
-}
-
-function resetArenaRound() {
-  G.arena.round++;
-  const spawns = arenaSpawns();
-  const at = { 0: 0, 1: 0 };
-  genArenaMap();               // 增益地塊重新長出來、地形重新蓋一次
-  buildWorld();
-  refreshTraps();
-  for (const id of G.arena.participants) {
-    const u = byId(id);
-    if (!u) continue;
-    u.alive = true; u.hp = mhpOf(u); u.st = []; u.moved = false; u.acted = false; u.turned = false;
-    for (const k in u.cds) u.cds[k] = 0;
-    const spot = spawns[u.side][at[u.side]++];
-    u.x = spot[0]; u.y = spot[1]; u.dir = u.side === 0 ? 3 : 7;
-    buildUnitView(u); makeTag(u);
-  }
-  refreshArenaBuffTiles();
-  refreshTop(); refreshRoster(); drawMinimap();
-  arenaStartTurn(0);
+  if (!arenaAliveSide(u.side)) { await wait(400); await exitArena(1 - u.side); }
 }
 
 async function exitArena(winnerSide) {
-  log(`<b class="s${winnerSide}">${SIDE_N[winnerSide]}</b> 拿下整場競技場！`);
+  log(`<b class="s${winnerSide}">${SIDE_N[winnerSide]}</b> 贏得競技場！`);
   giveGold(0, winnerSide === 0 ? ARENA_GOLD_WIN : ARENA_GOLD_LOSE);
   giveGold(1, winnerSide === 1 ? ARENA_GOLD_WIN : ARENA_GOLD_LOSE);
   toast(`競技場結束，<b class="s${winnerSide}">${SIDE_N[winnerSide]}</b>獲勝！雙方都拿到了金幣`);
@@ -180,7 +189,7 @@ async function exitArena(winnerSide) {
     if (!u) continue;
     const pos = saved.heroPos[id];
     u.x = pos[0]; u.y = pos[1];
-    u.alive = true;                                   // 這輪就算在競技場被淘汰，回主戰場照樣站著
+    u.alive = true;                                   // 這場就算在競技場被淘汰，回主戰場照樣站著
     u.hp = Math.max(1, Math.ceil(mhpOf(u) / 2));       // 統一回復一半——這是進競技場的風險代價
     u.st = [];
     u.dir = u.side === 0 ? 3 : 7;
@@ -191,6 +200,7 @@ async function exitArena(winnerSide) {
   ARENA_BUFFS = {};
   refreshArenaBuffTiles();   // 清掉還留在畫面上的增益地塊光環
   G.arena = null;
+  camJob++;                          // 同上：作廢任何還沒跑完的鏡頭補間，回主地圖時鏡頭才會準確歸位
   camTarget.set(wx(THRONE[0]), 0, wz(THRONE[1])); camDist = 30; updCam();
   refreshTop(); refreshRoster(); drawMinimap();
   if (checkVictory()) return;
@@ -207,14 +217,24 @@ async function pickupArenaBuff(u) {
   if (!kind) return;
   delete ARENA_BUFFS[key];
   refreshArenaBuffTiles();
+  const names = { power: '力量增幅', charge: '蓄力', guard: '守護', haste: '迅捷' };
+  floatText(u.x, u.y, names[kind] + '！', 'up');
   if (kind === 'power') {
-    addSt(u, u, { id: 'atk', pct: 0.3, turns: 3 });
-    floatText(u.x, u.y, '力量增幅！', 'up');
-    log(`<span class="s${u.side}">${nameOf(u)}</span> 撿到「力量增幅」，攻擊 +30%（3 回合）`);
-  } else {
+    addSt(u, u, { id: 'atk', pct: 0.2, turns: 3 });
+    log(`<span class="s${u.side}">${nameOf(u)}</span> 撿到「力量增幅」，攻擊 +20%（3 回合）`);
+  } else if (kind === 'charge') {
     u.charged = true;
-    floatText(u.x, u.y, '蓄力！', 'up');
-    log(`<span class="s${u.side}">${nameOf(u)}</span> 撿到「蓄力」，下一次普通攻擊 +100% 傷害`);
+    log(`<span class="s${u.side}">${nameOf(u)}</span> 撿到「蓄力」，下一次普通攻擊 +50% 傷害`);
+  } else if (kind === 'guard') {
+    addSt(u, u, { id: 'shield', pct: 1.5, turns: 3 });
+    log(`<span class="s${u.side}">${nameOf(u)}</span> 撿到「守護」，獲得一層護盾（3 回合）`);
+  } else if (kind === 'haste') {
+    addSt(u, u, { id: 'mov', val: 2, turns: 2 });
+    log(`<span class="s${u.side}">${nameOf(u)}</span> 撿到「迅捷」，移動 +2（2 回合）`);
   }
   await wait(250);
 }
+
+// 進競技場的大字提示：跟 turnBanner() 同一套飛行動畫，但固定橘色、
+// 不跟著 G.cur 的隊伍色走——這是雙方共同的事件，不是某一邊的回合
+function arenaBanner() { showBanner('競技場', 'arena', $('turnNo'), 900); }

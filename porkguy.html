@@ -454,13 +454,18 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
 #turnBanner.s0 #turnBigTxt{color:#8fc0ff}
 #turnBanner.s1 #turnBigTxt{color:#ff9a8a}
 #turnBanner.s2 #turnBigTxt{color:#b9aeff;font-size:44px;letter-spacing:6px}
-#turnBanner.mine #turnBigTxt{color:var(--gold)}
+#turnBanner.shop #turnBigTxt{color:var(--gold);font-size:52px;letter-spacing:8px}
+#turnBanner.arena #turnBigTxt{color:#ff9a4a;font-size:52px;letter-spacing:8px}
+/* 拿掉「輪到你就是金色」的特例——直接用該隊自己的顏色，藍方回合就是藍色 */
 
 /* 上面面板的「輪到誰」 */
 #turnWho em{font-style:normal;font-size:10.5px;color:var(--dim);margin-left:5px}
-#turnWho.mine{color:var(--gold);font-weight:700}
+#turnWho.mine{font-weight:700}
 
 /* ══════════ 商店 ══════════ */
+/* 商店回合不像其他選單要蓋住整個畫面——玩家還在看盤面決定要不要出價，
+   所以背景改成半透明的黑色漸層，卡片本身照舊不透明方便閱讀 */
+#shopOv{background:linear-gradient(to top,rgba(4,6,10,.88),rgba(4,6,10,.25))}
 #shopList{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:12px 0}
 .shItem{flex:0 0 100px;padding:7px 6px;border-radius:9px;background:#131a26;
   border:1px solid var(--line);text-align:center;opacity:.55;transition:.15s}
@@ -470,17 +475,29 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
 .shItem.done{opacity:.3}
 .shItem.q0 b{color:#c9d2e0} .shItem.q1 b{color:#5fd39a} .shItem.q2 b{color:#5aa2ff}
 .shItem.q3 b{color:#c07dff} .shItem.q4 b{color:#e8c168}
-#shopCur{background:#131a26;border:1px solid var(--line);border-radius:10px;
-  padding:12px 16px;text-align:left;margin-bottom:12px}
-#shopCur h5{display:flex;justify-content:space-between;align-items:baseline;font-size:15px}
+/* 左邊商品資訊卡、右邊競標操作，兩欄並排 */
+#shopMain{display:flex;gap:14px;text-align:left;align-items:stretch}
+#shopCur{flex:1 1 0;background:#131a26;border:1px solid var(--line);border-radius:10px;
+  padding:14px 16px}
+#shopCur h5{display:flex;justify-content:space-between;align-items:baseline;font-size:16px}
 #shopCur h5 em{font-size:11px;color:var(--dim);font-style:normal;font-weight:400}
-#shopCur p{color:var(--dim);margin:5px 0 8px;font-size:12px}
-#shopCur .sr{display:flex;gap:6px;font-size:12px;padding:2px 0}
+#shopCur p{color:var(--dim);margin:7px 0 10px;font-size:12.5px;line-height:1.6}
+#shopCur .sr{display:flex;gap:6px;font-size:12.5px;padding:3px 0}
 #shopCur .sr b{color:var(--txt);font-weight:700}
-#shopBidRow{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
-#shopWhoseTurn{font-size:12.5px;color:var(--dim);margin-right:4px}
-#shopBidAmt{width:80px;padding:6px 8px;border-radius:7px;border:1px solid var(--line);
+#shopRight{flex:0 0 220px;display:flex;flex-direction:column;gap:10px;
+  background:#131a26;border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+#shopGoldRow{display:flex;align-items:center;gap:6px;font-size:13px}
+#shopGoldRow i{font-style:normal}
+#shopGoldRow b{color:var(--gold);font-size:16px}
+#shopGoldRow span{color:var(--dim);font-size:11px;margin-left:auto}
+#shopWhoseTurn{font-size:12.5px;color:var(--dim);text-align:center;
+  padding:4px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+#shopBidRow{display:flex;align-items:center;justify-content:center;gap:6px}
+#shopBidRow button{width:34px;padding:6px 0;font-weight:700}
+#shopBidAmt{width:70px;padding:6px 4px;border-radius:7px;border:1px solid var(--line);
   background:#0e141f;color:var(--txt);font:inherit;text-align:center}
+#shopActRow{display:flex;gap:8px}
+#shopActRow button{flex:1}
 
 /* 背包回合的倒數列，固定在上面面板下方 */
 #bagPhaseBar{position:fixed;top:50px;left:50%;transform:translateX(-50%);z-index:20;
@@ -621,12 +638,21 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
     <h1 style="font-size:20px;letter-spacing:4px">商店</h1>
     <div class="sub">SHOP · 回合制競標，由低到高依序拍賣</div>
     <div id="shopList"></div>
-    <div id="shopCur"></div>
-    <div id="shopBidRow">
-      <span id="shopWhoseTurn"></span>
-      <input id="shopBidAmt" type="number">
-      <button class="prime" id="shopBidBtn">出價</button>
-      <button id="shopPassBtn">放棄</button>
+    <div id="shopMain">
+      <div id="shopCur"></div>
+      <div id="shopRight">
+        <div id="shopGoldRow"><i>🪙</i><b id="shopMyGold">0</b><span>你的金幣</span></div>
+        <div id="shopWhoseTurn"></div>
+        <div id="shopBidRow">
+          <button id="shopMinus">－</button>
+          <input id="shopBidAmt" type="number">
+          <button id="shopPlus">＋5</button>
+        </div>
+        <div id="shopActRow">
+          <button class="prime" id="shopBidBtn">出價</button>
+          <button id="shopPassBtn">放棄</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -762,6 +788,7 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
         <tr><td>沼澤</td><td>3</td><td>防禦 −1，踏進去移動就結束</td></tr>
         <tr><td>深水</td><td colspan="2">不可通行</td></tr>
         <tr><td>王座</td><td>2</td><td>防禦 +2、勝利點</td></tr>
+        <tr><td>石頭</td><td colspan="2">不可通行、擋遠程和魔法視線（競技場限定）</td></tr>
       </table>
 
       <h3>成長與裝備</h3>
@@ -792,9 +819,19 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
 
       <h3>競技場</h3>
       每 5 回合結束，雙方所有還站著的英雄會被強制傳送到一個獨立的 16×16 競技場，
-      打「先拿到 3 分」的三戰制——單場打完某一輪，站著的一方拿一分，重新滿血開下一輪。<br>
-      場上有一次性的增益地塊：金色<em>力量增幅</em>攻擊 +30%（3 回合），紫色<em>蓄力</em>
-      下一次普通攻擊 +100% 傷害、之後攻擊 −30%（3 回合），撿到立刻生效，用掉或撿完就消失。<br>
+      單場打到某一方全滅為止就結束，<em>不是三戰制</em>。地形跟增益地塊每次都重新隨機，
+      兩邊看到的佈局一定一樣。<br>
+      場上有一堆<em>石頭</em>：不可通行，遠程和魔法的攻擊也<em>不能穿過去</em>，純粹當掩體用，
+      沒有任何加成（跟山地那種地形不一樣）。<br>
+      另外會有四種一次性增益地塊，每次都會湊齊四種、隨機分布：
+      <table>
+        <tr><th>增益</th><th>效果</th></tr>
+        <tr><td>力量增幅</td><td>攻擊 +20%（3 回合）</td></tr>
+        <tr><td>蓄力</td><td>下一次普通攻擊 +50% 傷害，打出去就消耗掉</td></tr>
+        <tr><td>守護</td><td>獲得一層護盾（3 回合）</td></tr>
+        <tr><td>迅捷</td><td>移動 +2（2 回合）</td></tr>
+      </table>
+      撿到立刻生效，站上去就沒了。<br>
       競技場結束後所有人回到原本在主戰場的位置，<em>血量統一恢復到上限的一半</em>——
       這是進競技場的風險，贏家和輸家都拿金幣，贏家更多。
 
@@ -5029,9 +5066,11 @@ const TER = {
   S: { n: '沼澤', cost: 3, def: -1, atk: 0, h: -0.10, col: 0x4d5c34, mire: 1 },
   W: { n: '深水', cost: 99, def: 0, atk: 0, h: -0.34, col: 0x1b4870 },
   T: { n: '王座', cost: 1, def: 2, atk: 0, h: 0.30, col: 0xb99539 },
-  C: { n: '營地', cost: 1, def: 2, atk: 0, h: 0.10, col: 0x9a8a68 }
+  C: { n: '營地', cost: 1, def: 2, atk: 0, h: 0.10, col: 0x9a8a68 },
+  // 石頭：不可通行，沒有任何數值加成，而且會擋住遠程／魔法的視線
+  K: { n: '石頭', cost: 99, def: 0, atk: 0, h: 0.45, col: 0x6b6f78, block: 1 }
 };
-const ORDER = ['R', 'P', 'F', 'M', 'S', 'W', 'T', 'C'];
+const ORDER = ['R', 'P', 'F', 'M', 'S', 'W', 'T', 'C', 'K'];
 
 // ── 攻擊 / 護甲類型（剋制三角）──
 //   法剋重甲、斬剋布甲、射剋輕甲
@@ -5895,6 +5934,11 @@ function buildWorld() {
     } else if (t === 'M') {
       rocks.push(trs(wx(x) + jx * 0.4, h - 0.1, wz(y) + jz * 0.4, ry, 5.2 + rng() * 1.6));
       if (rng() < 0.6) smallRocks.push(trs(wx(x) - jx, h, wz(y) - jz, rng() * 6.28, 3.2));
+    } else if (t === 'K') {
+      // 石頭障礙：故意疊高疊密一點，一眼就看得出這格不能走、也擋視線
+      rocks.push(trs(wx(x), h - 0.1, wz(y), ry, 6.4 + rng() * 2.0));
+      rocks.push(trs(wx(x) + jx * 0.5, h - 0.1, wz(y) + jz * 0.5, rng() * 6.28, 4.2 + rng() * 1.4));
+      smallRocks.push(trs(wx(x) - jx, h, wz(y) - jz, rng() * 6.28, 3.4));
     } else if (t === 'W') {
       if (rng() < 0.3) lilies.push(trs(wx(x) + jx, h + 0.02, wz(y) + jz, ry, 4 + rng() * 2));
     } else if (t === 'S') {
@@ -5924,10 +5968,14 @@ function buildWorld() {
     trs(wx(THRONE[0]) - TILE, th + 1.9, wz(THRONE[1]) + TILE, 0, 0.9),
     trs(wx(THRONE[0]) + TILE, th + 1.9, wz(THRONE[1]) + TILE, 0, 0.9)
   ]);
-  addInstances('castle_blue', [trs(wx(CAMP[0][0]), TER.C.h, wz(CAMP[0][1]), Math.PI * 0.75, 1.15)]);
-  addInstances('castle_red', [trs(wx(CAMP[1][0]), TER.C.h, wz(CAMP[1][1]), -Math.PI * 0.25, 1.15)]);
-  addInstances('banner_blue', [trs(wx(CAMP[0][0]) - 2.4, TER.C.h, wz(CAMP[0][1]) + 1.6, 0, 0.55)]);
-  addInstances('banner_red', [trs(wx(CAMP[1][0]) + 2.4, TER.C.h, wz(CAMP[1][1]) - 1.6, Math.PI, 0.55)]);
+  // 競技場的 CAMP 座標其實是英雄的出生點，不是真的營地——蓋一座城堡在
+  // 那格上會直接把剛傳送過去的單位蓋住，所以競技場裡不放城堡跟旗子
+  if (!G.arena) {
+    addInstances('castle_blue', [trs(wx(CAMP[0][0]), TER.C.h, wz(CAMP[0][1]), Math.PI * 0.75, 1.15)]);
+    addInstances('castle_red', [trs(wx(CAMP[1][0]), TER.C.h, wz(CAMP[1][1]), -Math.PI * 0.25, 1.15)]);
+    addInstances('banner_blue', [trs(wx(CAMP[0][0]) - 2.4, TER.C.h, wz(CAMP[0][1]) + 1.6, 0, 0.55)]);
+    addInstances('banner_red', [trs(wx(CAMP[1][0]) + 2.4, TER.C.h, wz(CAMP[1][1]) - 1.6, Math.PI, 0.55)]);
+  }
 
   refreshChests();
 }
@@ -6615,6 +6663,25 @@ const byId = i => G.units.find(u => u.id === i);
 const alive = () => G.units.filter(u => u.alive && !u.paused);
 const unitAt = (x, y) => G.units.find(u => u.alive && !u.paused && u.x === x && u.y === y);
 const dist = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+
+// 遠程／魔法攻擊的視線：兩點連線中間有沒有擋視線的地形（目前只有石頭）。
+// 貼身距離（1 格）不用檢查——都站隔壁了，中間不可能還卡著一塊石頭。
+// 不用嚴謹的 Bresenham，用比較密的取樣點沿線走一遍，射程本來就只有幾格，
+// 這樣算既好驗證又不會漏掉貼著格線走的情況。
+function hasLOS(a, b) {
+  const d = dist(a, b);
+  if (d <= 1) return true;
+  const steps = d * 4;
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    const x = Math.round(a.x + (b.x - a.x) * t), y = Math.round(a.y + (b.y - a.y) * t);
+    if ((x === a.x && y === a.y) || (x === b.x && y === b.y)) continue;
+    if (inBoard(x, y) && ter(x, y).block) return false;
+  }
+  return true;
+}
+// 近戰站隔壁看不看得到都無所謂；遠程／魔法才需要真的有視線
+const canReach = (a, b) => dmgType(a) === 'melee' || hasLOS(a, b);
 const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));   // 正方形距離
 const base = u => u.side === 2 ? MON[u.kind] : CLS[u.cls];
 const nameOf = u => u.side === 2 ? MON[u.kind].n
@@ -6727,7 +6794,7 @@ function canCounter(a, d, opt) {
   if (pasOf(a, 'firstNoCounter') && !a.hitOnce) return false;
   if (pasOf(a, 'farNoCounter') && dist(a, d) >= pasOf(a, 'farNoCounter')) return false;
   if (flankMult(a, d) === FLANK.back && !pasOf(d, 'backCounter')) return false;
-  return dist(a, d) <= rngOf(d);
+  return dist(a, d) <= rngOf(d) && canReach(d, a);
 }
 
 /* ── 移動範圍（含控制區域）── */
@@ -6786,15 +6853,20 @@ function pathTo(r, u, x, y) {
 // 找一個打得到目標的落腳點（原地優先，其次最近）
 function stopToHit(r, u, tx, ty, range) {
   const rg = range || rngOf(u);
-  let best = null, bc = 1e9;
+  // 遠程／魔法要挑一個看得到目標的落點，不然走過去了石頭還是擋在中間；
+  // 找不到這種格子的話退回原本「離目標最近」的邏輯，至少不會完全不動
+  const needLOS = dmgType(u) !== 'melee';
+  let best = null, bc = 1e9, bestAny = null, bcAny = 1e9;
   for (const [sx, sy] of r.stops) {
     const d = Math.abs(sx - tx) + Math.abs(sy - ty);
     if (d < 1 || d > rg) continue;
     let c = r.cost[key(sx, sy)];
     if (sx === u.x && sy === u.y) c -= 1000;
+    if (c < bcAny) { bcAny = c; bestAny = [sx, sy]; }
+    if (needLOS && d > 1 && !hasLOS({ x: sx, y: sy }, { x: tx, y: ty })) continue;
     if (c < bc) { bc = c; best = [sx, sy]; }
   }
-  return best;
+  return best || bestAny;
 }
 
 // 從 (cx,cy) 往外找一個沒人站、走得進去的格子
@@ -6815,6 +6887,7 @@ function targetsOf(u) {
     if (o === u) continue;
     const d = dist(u, o);
     if (d < 1 || d > rg) continue;
+    if (!canReach(u, o)) continue;   // 遠程／魔法被石頭擋視線就打不到
     if (o.side !== u.side) out.push(o);
     else if (base(u).healPct && o.hp < mhpOf(o)) out.push(o);
   }
@@ -7086,7 +7159,7 @@ async function strike(a, d, opt) {
   const crit = !opt.noCrit && grng() < critOf(a);
   const fm = flankMult(a, d);
   const charged = !!a.charged;       // 競技場的蓄力地塊：下一次普通攻擊打完就消耗掉
-  const dmg = dmgCalc(a, d, { crit, mult: (opt.mult || 1) * (charged ? 2 : 1), noFlank: opt.noFlank });
+  const dmg = dmgCalc(a, d, { crit, mult: (opt.mult || 1) * (charged ? 1.5 : 1), noFlank: opt.noFlank });
   if (charged) {
     a.charged = false;
     addSt(a, a, { id: 'weaken', pct: 0.3, turns: 2 });
@@ -7993,39 +8066,76 @@ function newGame(seed, picks) {
 /* ───── arena.js ───── */
 /* ══════════════ 競技場 ══════════════
    每 ARENA_INTERVAL 回合結束時，雙方所有還站著的英雄被強制傳送到一個
-   固定 16×16 的小競技場，打「先拿到 ARENA_WINS 分」的三戰制。
+   16×16 的小競技場，打**一場**——先把對方全部打倒的一方獲勝就結束
+   （不是同一輪三戰兩勝；那個規則以後可能會再改，現在先簡單一輪定勝負）。
    結束後所有人回到原本在主戰場的位置，血量統一恢復到上限的一半——
    這樣進競技場才有風險，不是純粹白拿獎勵的小遊戲。
-   場上有一次性的增益地塊，走過去就撿到、用掉就消失，撿完當輪不會再長出來。 */
+   場上有一次性的增益地塊，走過去就撿到、用掉就消失。地形跟增益地塊
+   的位置每次都重新隨機，但兩邊用同一個種子算，畫面會完全一致。 */
 
 const ARENA_INTERVAL = 5;    // 每幾回合結束強制開一次
 const ARENA_SIZE = 16;
-const ARENA_WINS = 3;        // 先拿到幾分獲勝
 const ARENA_GOLD_WIN = 40, ARENA_GOLD_LOSE = 10;
 
-// 固定佈局，180° 對稱，不用亂數 —— 競技場的地形不需要每次都不一樣，
-// 重點在雙方公平，用固定佈局最不容易出同步或平衡的意外
-let ARENA_BUFFS = {};   // key 'x,y' -> 'power' | 'charge'，撿掉就從這裡刪掉
+// 四種一次性增益，撿到立刻生效、從地上消失
+const ARENA_BUFF_KINDS = ['power', 'charge', 'guard', 'haste'];
+let ARENA_BUFFS = {};   // key 'x,y' -> 種類
 
 function arenaSpawns() {
   return { 0: [[1, 14], [2, 14], [1, 13]], 1: [[14, 1], [13, 1], [14, 2]] };
 }
 
+// 地形跟增益地塊的位置都用亂數決定，但種子固定用「主局種子 × 這次進場的回合數」，
+// 兩邊各自算出來的結果保證一致，不需要多送一個網路訊息去同步佈局
 function genArenaMap() {
   const n = ARENA_SIZE;
   W = H = n; THRONE = [n >> 1, n >> 1]; CAMP = [[1, 14], [14, 1]];
   MAP = [];
   for (let y = 0; y < n; y++) { MAP[y] = []; for (let x = 0; x < n; x++) MAP[y][x] = 'P'; }
   const mirror = (x, y) => [n - 1 - x, n - 1 - y];
-  const put = (x, y, t) => { MAP[y][x] = t; const [mx, my] = mirror(x, y); MAP[my][mx] = t; };
-  // 中央一叢障礙卡位置，兩側各留一點森林
-  put(6, 6, 'M'); put(7, 7, 'M'); put(6, 7, 'F'); put(7, 6, 'F');
-  put(2, 8, 'F'); put(13, 7, 'F');
+  const put = (x, y, t) => {
+    if (!inBoard(x, y)) return;
+    MAP[y][x] = t;
+    const [mx, my] = mirror(x, y);
+    if (inBoard(mx, my)) MAP[my][mx] = t;
+  };
+  const near = (x, y, cx, cy, r) => Math.abs(x - cx) + Math.abs(y - cy) <= r;
+  const nearSpawn = (x, y) => near(x, y, 1, 14, 2) || near(x, y, 14, 1, 2);
+
+  const arRng = mulberry32((G.seed ^ (G.turn * 0x1000193)) >>> 0);
+  // 石頭：純障礙物——不可通行、擋視線、沒有任何加成，跟主地圖的山地／森林分開處理
+  const rockCount = 4 + Math.floor(arRng() * 4);
+  for (let i = 0; i < rockCount; i++) {
+    const x = 2 + Math.floor(arRng() * (n - 4)), y = 2 + Math.floor(arRng() * (n - 4));
+    if (nearSpawn(x, y)) continue;
+    put(x, y, 'K');
+    // 偶爾黏一格出來，讓障礙看起來像一叢石頭而不是孤零零一格
+    if (arRng() < 0.4) {
+      const [dx, dy] = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(arRng() * 4)];
+      if (!nearSpawn(x + dx, y + dy)) put(x + dx, y + dy, 'K');
+    }
+  }
+  // 地形變化：森林／山地／沼澤照舊可以走，只是帶著各自的加成與代價，每次隨機
+  const terrainCount = 5 + Math.floor(arRng() * 5);
+  const varietyTer = ['F', 'F', 'M', 'S'];
+  for (let i = 0; i < terrainCount; i++) {
+    const x = 2 + Math.floor(arRng() * (n - 4)), y = 2 + Math.floor(arRng() * (n - 4));
+    if (nearSpawn(x, y) || MAP[y][x] !== 'P') continue;
+    put(x, y, varietyTer[Math.floor(arRng() * varietyTer.length)]);
+  }
+
   CAMPS = []; CHESTS = []; TRAPS = [];
   ARENA_BUFFS = {};
-  const setBuff = (x, y, kind) => { ARENA_BUFFS[x + ',' + y] = kind; const [mx, my] = mirror(x, y); ARENA_BUFFS[mx + ',' + my] = kind; };
-  setBuff(4, 4, 'power');
-  setBuff(4, 11, 'charge');
+  // 四種增益各放一個，盡量分散、避開出生角落和已經是障礙物的格子
+  const spots = [];
+  let guard = 0;
+  while (spots.length < ARENA_BUFF_KINDS.length && guard++ < 300) {
+    const x = 2 + Math.floor(arRng() * (n - 4)), y = 2 + Math.floor(arRng() * (n - 4));
+    if (nearSpawn(x, y) || MAP[y][x] !== 'P') continue;
+    if (spots.some(s => Math.abs(s[0] - x) + Math.abs(s[1] - y) < 3)) continue;
+    spots.push([x, y]);
+  }
+  ARENA_BUFF_KINDS.forEach((k, i) => { if (spots[i]) ARENA_BUFFS[spots[i][0] + ',' + spots[i][1]] = k; });
 }
 
 const arenaUnits = side => (G.arena ? G.arena.participants.map(byId).filter(u => u && u.side === side) : []);
@@ -8043,8 +8153,9 @@ async function enterArena() {
     return;
   }
 
-  toast('雙方被傳送到競技場！先拿到 ' + ARENA_WINS + ' 分獲勝');
-  log('<b class="up">── 競技場開打：先拿到 ' + ARENA_WINS + ' 分獲勝 ──</b>');
+  toast('雙方被傳送到競技場！');
+  log('<b class="up">── 競技場開打 ──</b>');
+  arenaBanner();
 
   const saved = {
     seed: G.seed, w: W, heroPos: {},
@@ -8069,13 +8180,14 @@ async function enterArena() {
     buildUnitView(u); makeTag(u);
     participants.push(u.id);
   }
-  // 沒被傳送過去的（怪物、沒參賽的英雄）整批凍結，見上面 alive()/unitAt() 的註解
+  // 沒被傳送過去的（怪物、沒參賽的英雄）整批凍結，見 alive()/unitAt() 的註解
   for (const u of G.units) u.paused = !participants.includes(u.id);
 
-  G.arena = { wins: [0, 0], round: 1, saved, participants };
+  G.arena = { saved, participants };
   refreshArenaBuffTiles();
   camAz = Math.PI * 0.25; camDist = 22;
-  camTarget.set(wx(7), 0, wz(8));
+  camJob++;                          // 作廢任何還在飛的鏡頭補間（例如剛才 startTurn() 那個沒等的），
+  camTarget.set(wx(7), 0, wz(8));    // 不然它跑完會把鏡頭拉回舊地圖的座標，畫面對不上新的小競技場
   updCam();
   refreshTop(); refreshRoster(); drawMinimap();
   arenaStartTurn(0);
@@ -8096,13 +8208,13 @@ function arenaStartTurn(side) {
 }
 
 // 只有 doEndTurn() 判斷 G.arena 存在時才會走到這裡——競技場裡沒有魔物階段，
-// 純粹雙方輪流，直到某一輪打到只剩一邊站著（在 arenaDie() 裡反應式判定）
+// 純粹雙方輪流，直到一輪打到只剩一邊站著（在 arenaDie() 裡反應式判定）
 async function arenaEndTurn() {
   arenaStartTurn(G.cur === 0 ? 1 : 0);
 }
 
 // 這裡跟主賽事的 die() 分開走：不掉經驗、不進倒下復活、不觸發殲滅判定，
-// 純粹只是「這一輪淘汰」，資源全部留給正式比賽用
+// 純粹只是「這場淘汰」，資源全部留給正式比賽用
 async function arenaDie(u) {
   u.alive = false;
   log(`<span class="kill">${nameOf(u)} 在競技場倒下了</span>`);
@@ -8118,41 +8230,11 @@ async function arenaDie(u) {
   }
   removeView(u);
   refreshRoster();
-  if (!arenaAliveSide(u.side)) await arenaRoundOver(1 - u.side);
-}
-
-async function arenaRoundOver(winnerSide) {
-  G.arena.wins[winnerSide]++;
-  log(`<b class="s${winnerSide}">${SIDE_N[winnerSide]}</b> 贏得競技場第 ${G.arena.round} 輪（${G.arena.wins[0]}：${G.arena.wins[1]}）`);
-  toast(`<b class="s${winnerSide}">${SIDE_N[winnerSide]}</b> 贏得第 ${G.arena.round} 輪！`);
-  if (G.arena.wins[winnerSide] >= ARENA_WINS) { await wait(500); await exitArena(winnerSide); return; }
-  await wait(600);
-  resetArenaRound();
-}
-
-function resetArenaRound() {
-  G.arena.round++;
-  const spawns = arenaSpawns();
-  const at = { 0: 0, 1: 0 };
-  genArenaMap();               // 增益地塊重新長出來、地形重新蓋一次
-  buildWorld();
-  refreshTraps();
-  for (const id of G.arena.participants) {
-    const u = byId(id);
-    if (!u) continue;
-    u.alive = true; u.hp = mhpOf(u); u.st = []; u.moved = false; u.acted = false; u.turned = false;
-    for (const k in u.cds) u.cds[k] = 0;
-    const spot = spawns[u.side][at[u.side]++];
-    u.x = spot[0]; u.y = spot[1]; u.dir = u.side === 0 ? 3 : 7;
-    buildUnitView(u); makeTag(u);
-  }
-  refreshArenaBuffTiles();
-  refreshTop(); refreshRoster(); drawMinimap();
-  arenaStartTurn(0);
+  if (!arenaAliveSide(u.side)) { await wait(400); await exitArena(1 - u.side); }
 }
 
 async function exitArena(winnerSide) {
-  log(`<b class="s${winnerSide}">${SIDE_N[winnerSide]}</b> 拿下整場競技場！`);
+  log(`<b class="s${winnerSide}">${SIDE_N[winnerSide]}</b> 贏得競技場！`);
   giveGold(0, winnerSide === 0 ? ARENA_GOLD_WIN : ARENA_GOLD_LOSE);
   giveGold(1, winnerSide === 1 ? ARENA_GOLD_WIN : ARENA_GOLD_LOSE);
   toast(`競技場結束，<b class="s${winnerSide}">${SIDE_N[winnerSide]}</b>獲勝！雙方都拿到了金幣`);
@@ -8173,7 +8255,7 @@ async function exitArena(winnerSide) {
     if (!u) continue;
     const pos = saved.heroPos[id];
     u.x = pos[0]; u.y = pos[1];
-    u.alive = true;                                   // 這輪就算在競技場被淘汰，回主戰場照樣站著
+    u.alive = true;                                   // 這場就算在競技場被淘汰，回主戰場照樣站著
     u.hp = Math.max(1, Math.ceil(mhpOf(u) / 2));       // 統一回復一半——這是進競技場的風險代價
     u.st = [];
     u.dir = u.side === 0 ? 3 : 7;
@@ -8184,6 +8266,7 @@ async function exitArena(winnerSide) {
   ARENA_BUFFS = {};
   refreshArenaBuffTiles();   // 清掉還留在畫面上的增益地塊光環
   G.arena = null;
+  camJob++;                          // 同上：作廢任何還沒跑完的鏡頭補間，回主地圖時鏡頭才會準確歸位
   camTarget.set(wx(THRONE[0]), 0, wz(THRONE[1])); camDist = 30; updCam();
   refreshTop(); refreshRoster(); drawMinimap();
   if (checkVictory()) return;
@@ -8200,17 +8283,27 @@ async function pickupArenaBuff(u) {
   if (!kind) return;
   delete ARENA_BUFFS[key];
   refreshArenaBuffTiles();
+  const names = { power: '力量增幅', charge: '蓄力', guard: '守護', haste: '迅捷' };
+  floatText(u.x, u.y, names[kind] + '！', 'up');
   if (kind === 'power') {
-    addSt(u, u, { id: 'atk', pct: 0.3, turns: 3 });
-    floatText(u.x, u.y, '力量增幅！', 'up');
-    log(`<span class="s${u.side}">${nameOf(u)}</span> 撿到「力量增幅」，攻擊 +30%（3 回合）`);
-  } else {
+    addSt(u, u, { id: 'atk', pct: 0.2, turns: 3 });
+    log(`<span class="s${u.side}">${nameOf(u)}</span> 撿到「力量增幅」，攻擊 +20%（3 回合）`);
+  } else if (kind === 'charge') {
     u.charged = true;
-    floatText(u.x, u.y, '蓄力！', 'up');
-    log(`<span class="s${u.side}">${nameOf(u)}</span> 撿到「蓄力」，下一次普通攻擊 +100% 傷害`);
+    log(`<span class="s${u.side}">${nameOf(u)}</span> 撿到「蓄力」，下一次普通攻擊 +50% 傷害`);
+  } else if (kind === 'guard') {
+    addSt(u, u, { id: 'shield', pct: 1.5, turns: 3 });
+    log(`<span class="s${u.side}">${nameOf(u)}</span> 撿到「守護」，獲得一層護盾（3 回合）`);
+  } else if (kind === 'haste') {
+    addSt(u, u, { id: 'mov', val: 2, turns: 2 });
+    log(`<span class="s${u.side}">${nameOf(u)}</span> 撿到「迅捷」，移動 +2（2 回合）`);
   }
   await wait(250);
 }
+
+// 進競技場的大字提示：跟 turnBanner() 同一套飛行動畫，但固定橘色、
+// 不跟著 G.cur 的隊伍色走——這是雙方共同的事件，不是某一邊的回合
+function arenaBanner() { showBanner('競技場', 'arena', $('turnNo'), 900); }
 
 /* ───── shop.js ───── */
 /* ══════════════ 商店 ══════════════
@@ -8258,6 +8351,7 @@ async function enterShop() {
   log('<b class="up">── 商店開張：5 件商品依序拍賣 ──</b>');
   toast('商店開張！雙方輪流出價');
   refreshTop();
+  shopBanner();
   openShop();
   aiShopMaybeBid();
 }
@@ -8355,6 +8449,9 @@ async function exitShop() {
   await startTurn(0);
 }
 
+// 開商店的大字提示：黃色，飛到上面面板的回合數字那格
+function shopBanner() { showBanner('商店回合', 'shop', $('turnNo'), 900); }
+
 /* ── 商店面板 ── */
 
 function openShop() {
@@ -8381,12 +8478,15 @@ function refreshShopUI() {
   $('shopCur').innerHTML = `<h5 class="q${item.q}">${shopItemName(item)}<em>${QN[item.q]}・${shopItemType(item)}</em></h5>
     <p>${shopItemDesc(item)}</p>
     <div class="sr">目前出價　<b>${s.bidder >= 0 ? s.bid + ' 金幣（' + SIDE_N[s.bidder] + '）' : '尚無人出價'}</b></div>
-    <div class="sr">最低加價　<b>${SHOP_MIN_RAISE(item.q)}</b>　　你的金幣　<b>${G.gold[mySide]}</b></div>`;
+    <div class="sr">最低加價　<b>${SHOP_MIN_RAISE(item.q)}</b></div>`;
 
+  $('shopMyGold').textContent = G.gold[mySide];
   $('shopWhoseTurn').innerHTML = `輪到 <b class="s${s.turn}">${SIDE_N[s.turn]}</b>` +
     (mode === 'online' ? (myGo ? '（你）' : '（對手，請稍候）') : '');
   const amt = $('shopBidAmt');
   amt.min = min; amt.max = Math.max(min, G.gold[mySide]); amt.value = Math.min(min, G.gold[mySide]) || min;
+  $('shopMinus').disabled = !myGo || +amt.value <= min;
+  $('shopPlus').disabled = !myGo || +amt.value >= G.gold[mySide];
   $('shopBidBtn').disabled = !myGo || G.gold[mySide] < min;
   $('shopPassBtn').disabled = !myGo;
 }
@@ -8885,14 +8985,15 @@ const myTurnNow = () => G.cur < 2 && (mode !== 'online' || G.cur === myTeam);
 const playerSide = () => (G.cur < 2 ? G.cur : (G.lastSide || 0));
 
 function refreshTop() {
-  $('turnNo').textContent = G.arena ? '競技場・第 ' + G.arena.round + ' 輪' : '第 ' + G.turn + ' 回合';
+  $('turnNo').textContent = G.arena ? '競技場' : '第 ' + G.turn + ' 回合';
   const w = $('turnWho');
   w.className = 's' + G.cur + (myTurnNow() ? ' mine' : '');
   w.innerHTML = `<i class="dot s${G.cur}"></i>${turnLabel()}` +
     (mode === 'online' ? `<em>${SIDE_N[G.cur]}</em>` : '');
   if (G.arena) {
-    $('force').innerHTML = `<span class="s0">${G.arena.wins[0]}</span> : <span class="s1">${G.arena.wins[1]}</span>` +
-      `<span class="mons">　先拿 ${ARENA_WINS} 分</span>`;
+    const ac = s => arenaUnits(s).filter(u => u.alive).length;
+    $('force').innerHTML = `<span class="s0">${ac(0)}</span> : <span class="s1">${ac(1)}</span>` +
+      `<span class="mons">　競技場</span>`;
   } else {
     const c = s => alive().filter(u => u.side === s).length;
     $('force').innerHTML = `<span class="s0">${c(0)}</span> : <span class="s1">${c(1)}</span>` +
@@ -8917,12 +9018,13 @@ function refreshTop() {
    先在畫面正中央淡入一個大字，停一下，再縮小飛到上面的面板上，
    剛好落在「現在輪到誰」那一格。 */
 let bannerJob = 0;
-function turnBanner() {
+// 共用的「畫面正中央淡入大字，停一下，縮小飛到某個目標元素」動畫，
+// 回合／商店／競技場的開場提示都是同一套，差別只在文字、顏色 class、飛去哪裡
+function showBanner(text, cls, targetEl, holdMs) {
   const el = $('turnBanner'), txt = $('turnBigTxt');
   const job = ++bannerJob;
-  const mine = myTurnNow();
-  txt.textContent = turnLabel();
-  el.className = 'show s' + G.cur + (mine ? ' mine' : '');
+  txt.textContent = text;
+  el.className = 'show ' + cls;
   txt.style.transition = 'none';
   txt.style.transform = 'translate(0,0) scale(1)';
   txt.style.opacity = '0';
@@ -8933,11 +9035,10 @@ function turnBanner() {
   txt.style.transition = 'opacity .28s ease';
   txt.style.opacity = '1';
 
-  // 停留之後往上面的面板收
   setTimeout(() => {
     if (job !== bannerJob) return;
     const from = txt.getBoundingClientRect();
-    const to = $('turnWho').getBoundingClientRect();
+    const to = targetEl.getBoundingClientRect();
     if (!from.width || !to.width) { el.className = 'hide'; return; }
     const k = Math.max(0.12, to.height / from.height);
     const dx = (to.left + to.width / 2) - (from.left + from.width / 2);
@@ -8947,7 +9048,12 @@ function turnBanner() {
     txt.style.opacity = '0';
     el.classList.add('fading');
     setTimeout(() => { if (job === bannerJob) el.className = 'hide'; }, 560);
-  }, mine ? 900 : 620);
+  }, holdMs);
+}
+
+function turnBanner() {
+  const mine = myTurnNow();
+  showBanner(turnLabel(), 's' + G.cur + (mine ? ' mine' : ''), $('turnWho'), mine ? 900 : 620);
 }
 
 function refreshRoster() {
@@ -9938,7 +10044,7 @@ function onClick(ev) {
     const ok = friendly ? (base(sel).healPct && u.hp < mhpOf(u)) : true;
     if (ok) {
       const kind = friendly ? 'heal' : 'attack';
-      if (dist(sel, u) <= rngOf(sel)) { send({ kind, uid: sel.id, tid: u.id, path: null }); return; }
+      if (dist(sel, u) <= rngOf(sel) && canReach(sel, u)) { send({ kind, uid: sel.id, tid: u.id, path: null }); return; }
       if (!sel.moved && reach) {
         const s = stopToHit(reach, sel, u.x, u.y);
         if (s) {
@@ -9947,7 +10053,7 @@ function onClick(ev) {
           return;
         }
       }
-      toast('打不到，先靠近一點');
+      toast(dist(sel, u) <= rngOf(sel) ? '被石頭擋住視線，換個角度' : '打不到，先靠近一點');
       return;
     }
   }
@@ -9980,6 +10086,17 @@ function panStep(dt) {
   camTarget.z += (-Math.sin(camAz) * fx + Math.cos(camAz) * fy) * sp;
   clampCam(); updCam();
 }
+
+// 分頁被切到背景時 rAF 會停擺，名牌/血條的位置是每幀在 animate() 裡用
+// camera 現算的，畫面不會動，名牌就會停在切走前那一刻的位置。
+// 切回來的瞬間先重算一次位置，並且把 clock 重置掉，不然背景那段時間的
+// 累積時間會被當成單一一幀的 delta，動畫會跳一下。
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (typeof clock !== 'undefined' && clock) clock.getDelta();   // 清掉累積的背景時間
+  if (typeof projectTags === 'function') projectTags();
+  if (typeof drawMinimap === 'function' && G.units && G.units.length) drawMinimap();
+});
 
 function bindInput() {
   const el = renderer.domElement;
@@ -10143,6 +10260,8 @@ function aiPlan(u) {
         if (!t.alive || t.paused || t === u) continue;
         const d = Math.abs(t.x - sx) + Math.abs(t.y - sy);
         if (d < 1 || d > rngOf(u)) continue;
+        // 石頭擋視線：AI 也要跟玩家一樣，射程內但被石頭擋住就打不到
+        if (d > 1 && !canReach({ x: sx, y: sy }, t)) continue;
 
         if (t.side === u.side) {
           // 治療
@@ -10675,6 +10794,22 @@ async function boot() {
   $('bagClose').onclick = closeBag;
   $('shopBidBtn').onclick = () => doShopBid(+$('shopBidAmt').value);
   $('shopPassBtn').onclick = doShopPass;
+  const stepShopBid = d => {
+    const amt = $('shopBidAmt');
+    const v = Math.max(+amt.min, Math.min(+amt.max, (+amt.value || 0) + d));
+    amt.value = v;
+    $('shopMinus').disabled = v <= +amt.min;
+    $('shopPlus').disabled = v >= +amt.max;
+  };
+  $('shopMinus').onclick = () => stepShopBid(-5);
+  $('shopPlus').onclick = () => stepShopBid(5);
+  // 手動輸入的話不要幫忙夾範圍，讓玩家可以自由打字——出不起或不夠加價
+  // 按〔出價〕的時候 doShopBid() 自然會擋下來並告知原因
+  $('shopBidAmt').oninput = () => {
+    const amt = $('shopBidAmt');
+    $('shopMinus').disabled = +amt.value <= +amt.min;
+    $('shopPlus').disabled = +amt.value >= +amt.max;
+  };
   $('bagPhaseSkip').onclick = doBagSkip;
   $('btnQuit').onclick = () => {
     if (net.peer) { net.peer.destroy(); net.peer = null; }

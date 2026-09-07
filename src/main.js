@@ -204,6 +204,22 @@ async function boot() {
   $('bagClose').onclick = closeBag;
   $('shopBidBtn').onclick = () => doShopBid(+$('shopBidAmt').value);
   $('shopPassBtn').onclick = doShopPass;
+  const stepShopBid = d => {
+    const amt = $('shopBidAmt');
+    const v = Math.max(+amt.min, Math.min(+amt.max, (+amt.value || 0) + d));
+    amt.value = v;
+    $('shopMinus').disabled = v <= +amt.min;
+    $('shopPlus').disabled = v >= +amt.max;
+  };
+  $('shopMinus').onclick = () => stepShopBid(-5);
+  $('shopPlus').onclick = () => stepShopBid(5);
+  // 手動輸入的話不要幫忙夾範圍，讓玩家可以自由打字——出不起或不夠加價
+  // 按〔出價〕的時候 doShopBid() 自然會擋下來並告知原因
+  $('shopBidAmt').oninput = () => {
+    const amt = $('shopBidAmt');
+    $('shopMinus').disabled = +amt.value <= +amt.min;
+    $('shopPlus').disabled = +amt.value >= +amt.max;
+  };
   $('bagPhaseSkip').onclick = doBagSkip;
   $('btnQuit').onclick = () => {
     if (net.peer) { net.peer.destroy(); net.peer = null; }

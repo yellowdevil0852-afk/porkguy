@@ -252,14 +252,15 @@ const myTurnNow = () => G.cur < 2 && (mode !== 'online' || G.cur === myTeam);
 const playerSide = () => (G.cur < 2 ? G.cur : (G.lastSide || 0));
 
 function refreshTop() {
-  $('turnNo').textContent = G.arena ? '競技場・第 ' + G.arena.round + ' 輪' : '第 ' + G.turn + ' 回合';
+  $('turnNo').textContent = G.arena ? '競技場' : '第 ' + G.turn + ' 回合';
   const w = $('turnWho');
   w.className = 's' + G.cur + (myTurnNow() ? ' mine' : '');
   w.innerHTML = `<i class="dot s${G.cur}"></i>${turnLabel()}` +
     (mode === 'online' ? `<em>${SIDE_N[G.cur]}</em>` : '');
   if (G.arena) {
-    $('force').innerHTML = `<span class="s0">${G.arena.wins[0]}</span> : <span class="s1">${G.arena.wins[1]}</span>` +
-      `<span class="mons">　先拿 ${ARENA_WINS} 分</span>`;
+    const ac = s => arenaUnits(s).filter(u => u.alive).length;
+    $('force').innerHTML = `<span class="s0">${ac(0)}</span> : <span class="s1">${ac(1)}</span>` +
+      `<span class="mons">　競技場</span>`;
   } else {
     const c = s => alive().filter(u => u.side === s).length;
     $('force').innerHTML = `<span class="s0">${c(0)}</span> : <span class="s1">${c(1)}</span>` +
@@ -284,12 +285,13 @@ function refreshTop() {
    先在畫面正中央淡入一個大字，停一下，再縮小飛到上面的面板上，
    剛好落在「現在輪到誰」那一格。 */
 let bannerJob = 0;
-function turnBanner() {
+// 共用的「畫面正中央淡入大字，停一下，縮小飛到某個目標元素」動畫，
+// 回合／商店／競技場的開場提示都是同一套，差別只在文字、顏色 class、飛去哪裡
+function showBanner(text, cls, targetEl, holdMs) {
   const el = $('turnBanner'), txt = $('turnBigTxt');
   const job = ++bannerJob;
-  const mine = myTurnNow();
-  txt.textContent = turnLabel();
-  el.className = 'show s' + G.cur + (mine ? ' mine' : '');
+  txt.textContent = text;
+  el.className = 'show ' + cls;
   txt.style.transition = 'none';
   txt.style.transform = 'translate(0,0) scale(1)';
   txt.style.opacity = '0';
@@ -300,11 +302,10 @@ function turnBanner() {
   txt.style.transition = 'opacity .28s ease';
   txt.style.opacity = '1';
 
-  // 停留之後往上面的面板收
   setTimeout(() => {
     if (job !== bannerJob) return;
     const from = txt.getBoundingClientRect();
-    const to = $('turnWho').getBoundingClientRect();
+    const to = targetEl.getBoundingClientRect();
     if (!from.width || !to.width) { el.className = 'hide'; return; }
     const k = Math.max(0.12, to.height / from.height);
     const dx = (to.left + to.width / 2) - (from.left + from.width / 2);
@@ -314,7 +315,12 @@ function turnBanner() {
     txt.style.opacity = '0';
     el.classList.add('fading');
     setTimeout(() => { if (job === bannerJob) el.className = 'hide'; }, 560);
-  }, mine ? 900 : 620);
+  }, holdMs);
+}
+
+function turnBanner() {
+  const mine = myTurnNow();
+  showBanner(turnLabel(), 's' + G.cur + (mine ? ' mine' : ''), $('turnWho'), mine ? 900 : 620);
 }
 
 function refreshRoster() {
@@ -1305,7 +1311,7 @@ function onClick(ev) {
     const ok = friendly ? (base(sel).healPct && u.hp < mhpOf(u)) : true;
     if (ok) {
       const kind = friendly ? 'heal' : 'attack';
-      if (dist(sel, u) <= rngOf(sel)) { send({ kind, uid: sel.id, tid: u.id, path: null }); return; }
+      if (dist(sel, u) <= rngOf(sel) && canReach(sel, u)) { send({ kind, uid: sel.id, tid: u.id, path: null }); return; }
       if (!sel.moved && reach) {
         const s = stopToHit(reach, sel, u.x, u.y);
         if (s) {
@@ -1314,7 +1320,7 @@ function onClick(ev) {
           return;
         }
       }
-      toast('打不到，先靠近一點');
+      toast(dist(sel, u) <= rngOf(sel) ? '被石頭擋住視線，換個角度' : '打不到，先靠近一點');
       return;
     }
   }
@@ -1347,6 +1353,17 @@ function panStep(dt) {
   camTarget.z += (-Math.sin(camAz) * fx + Math.cos(camAz) * fy) * sp;
   clampCam(); updCam();
 }
+
+// 分頁被切到背景時 rAF 會停擺，名牌/血條的位置是每幀在 animate() 裡用
+// camera 現算的，畫面不會動，名牌就會停在切走前那一刻的位置。
+// 切回來的瞬間先重算一次位置，並且把 clock 重置掉，不然背景那段時間的
+// 累積時間會被當成單一一幀的 delta，動畫會跳一下。
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (typeof clock !== 'undefined' && clock) clock.getDelta();   // 清掉累積的背景時間
+  if (typeof projectTags === 'function') projectTags();
+  if (typeof drawMinimap === 'function' && G.units && G.units.length) drawMinimap();
+});
 
 function bindInput() {
   const el = renderer.domElement;

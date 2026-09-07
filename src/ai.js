@@ -105,6 +105,8 @@ function aiPlan(u) {
         if (!t.alive || t.paused || t === u) continue;
         const d = Math.abs(t.x - sx) + Math.abs(t.y - sy);
         if (d < 1 || d > rngOf(u)) continue;
+        // 石頭擋視線：AI 也要跟玩家一樣，射程內但被石頭擋住就打不到
+        if (d > 1 && !canReach({ x: sx, y: sy }, t)) continue;
 
         if (t.side === u.side) {
           // 治療

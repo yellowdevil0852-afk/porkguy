@@ -312,6 +312,11 @@ function buildWorld() {
     } else if (t === 'M') {
       rocks.push(trs(wx(x) + jx * 0.4, h - 0.1, wz(y) + jz * 0.4, ry, 5.2 + rng() * 1.6));
       if (rng() < 0.6) smallRocks.push(trs(wx(x) - jx, h, wz(y) - jz, rng() * 6.28, 3.2));
+    } else if (t === 'K') {
+      // 石頭障礙：故意疊高疊密一點，一眼就看得出這格不能走、也擋視線
+      rocks.push(trs(wx(x), h - 0.1, wz(y), ry, 6.4 + rng() * 2.0));
+      rocks.push(trs(wx(x) + jx * 0.5, h - 0.1, wz(y) + jz * 0.5, rng() * 6.28, 4.2 + rng() * 1.4));
+      smallRocks.push(trs(wx(x) - jx, h, wz(y) - jz, rng() * 6.28, 3.4));
     } else if (t === 'W') {
       if (rng() < 0.3) lilies.push(trs(wx(x) + jx, h + 0.02, wz(y) + jz, ry, 4 + rng() * 2));
     } else if (t === 'S') {
@@ -341,10 +346,14 @@ function buildWorld() {
     trs(wx(THRONE[0]) - TILE, th + 1.9, wz(THRONE[1]) + TILE, 0, 0.9),
     trs(wx(THRONE[0]) + TILE, th + 1.9, wz(THRONE[1]) + TILE, 0, 0.9)
   ]);
-  addInstances('castle_blue', [trs(wx(CAMP[0][0]), TER.C.h, wz(CAMP[0][1]), Math.PI * 0.75, 1.15)]);
-  addInstances('castle_red', [trs(wx(CAMP[1][0]), TER.C.h, wz(CAMP[1][1]), -Math.PI * 0.25, 1.15)]);
-  addInstances('banner_blue', [trs(wx(CAMP[0][0]) - 2.4, TER.C.h, wz(CAMP[0][1]) + 1.6, 0, 0.55)]);
-  addInstances('banner_red', [trs(wx(CAMP[1][0]) + 2.4, TER.C.h, wz(CAMP[1][1]) - 1.6, Math.PI, 0.55)]);
+  // 競技場的 CAMP 座標其實是英雄的出生點，不是真的營地——蓋一座城堡在
+  // 那格上會直接把剛傳送過去的單位蓋住，所以競技場裡不放城堡跟旗子
+  if (!G.arena) {
+    addInstances('castle_blue', [trs(wx(CAMP[0][0]), TER.C.h, wz(CAMP[0][1]), Math.PI * 0.75, 1.15)]);
+    addInstances('castle_red', [trs(wx(CAMP[1][0]), TER.C.h, wz(CAMP[1][1]), -Math.PI * 0.25, 1.15)]);
+    addInstances('banner_blue', [trs(wx(CAMP[0][0]) - 2.4, TER.C.h, wz(CAMP[0][1]) + 1.6, 0, 0.55)]);
+    addInstances('banner_red', [trs(wx(CAMP[1][0]) + 2.4, TER.C.h, wz(CAMP[1][1]) - 1.6, Math.PI, 0.55)]);
+  }
 
   refreshChests();
 }

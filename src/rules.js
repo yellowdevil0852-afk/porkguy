@@ -20,6 +20,25 @@ const byId = i => G.units.find(u => u.id === i);
 const alive = () => G.units.filter(u => u.alive && !u.paused);
 const unitAt = (x, y) => G.units.find(u => u.alive && !u.paused && u.x === x && u.y === y);
 const dist = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+
+// 遠程／魔法攻擊的視線：兩點連線中間有沒有擋視線的地形（目前只有石頭）。
+// 貼身距離（1 格）不用檢查——都站隔壁了，中間不可能還卡著一塊石頭。
+// 不用嚴謹的 Bresenham，用比較密的取樣點沿線走一遍，射程本來就只有幾格，
+// 這樣算既好驗證又不會漏掉貼著格線走的情況。
+function hasLOS(a, b) {
+  const d = dist(a, b);
+  if (d <= 1) return true;
+  const steps = d * 4;
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    const x = Math.round(a.x + (b.x - a.x) * t), y = Math.round(a.y + (b.y - a.y) * t);
+    if ((x === a.x && y === a.y) || (x === b.x && y === b.y)) continue;
+    if (inBoard(x, y) && ter(x, y).block) return false;
+  }
+  return true;
+}
+// 近戰站隔壁看不看得到都無所謂；遠程／魔法才需要真的有視線
+const canReach = (a, b) => dmgType(a) === 'melee' || hasLOS(a, b);
 const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));   // 正方形距離
 const base = u => u.side === 2 ? MON[u.kind] : CLS[u.cls];
 const nameOf = u => u.side === 2 ? MON[u.kind].n
@@ -132,7 +151,7 @@ function canCounter(a, d, opt) {
   if (pasOf(a, 'firstNoCounter') && !a.hitOnce) return false;
   if (pasOf(a, 'farNoCounter') && dist(a, d) >= pasOf(a, 'farNoCounter')) return false;
   if (flankMult(a, d) === FLANK.back && !pasOf(d, 'backCounter')) return false;
-  return dist(a, d) <= rngOf(d);
+  return dist(a, d) <= rngOf(d) && canReach(d, a);
 }
 
 /* ── 移動範圍（含控制區域）── */
@@ -191,15 +210,20 @@ function pathTo(r, u, x, y) {
 // 找一個打得到目標的落腳點（原地優先，其次最近）
 function stopToHit(r, u, tx, ty, range) {
   const rg = range || rngOf(u);
-  let best = null, bc = 1e9;
+  // 遠程／魔法要挑一個看得到目標的落點，不然走過去了石頭還是擋在中間；
+  // 找不到這種格子的話退回原本「離目標最近」的邏輯，至少不會完全不動
+  const needLOS = dmgType(u) !== 'melee';
+  let best = null, bc = 1e9, bestAny = null, bcAny = 1e9;
   for (const [sx, sy] of r.stops) {
     const d = Math.abs(sx - tx) + Math.abs(sy - ty);
     if (d < 1 || d > rg) continue;
     let c = r.cost[key(sx, sy)];
     if (sx === u.x && sy === u.y) c -= 1000;
+    if (c < bcAny) { bcAny = c; bestAny = [sx, sy]; }
+    if (needLOS && d > 1 && !hasLOS({ x: sx, y: sy }, { x: tx, y: ty })) continue;
     if (c < bc) { bc = c; best = [sx, sy]; }
   }
-  return best;
+  return best || bestAny;
 }
 
 // 從 (cx,cy) 往外找一個沒人站、走得進去的格子
@@ -220,6 +244,7 @@ function targetsOf(u) {
     if (o === u) continue;
     const d = dist(u, o);
     if (d < 1 || d > rg) continue;
+    if (!canReach(u, o)) continue;   // 遠程／魔法被石頭擋視線就打不到
     if (o.side !== u.side) out.push(o);
     else if (base(u).healPct && o.hp < mhpOf(o)) out.push(o);
   }
@@ -491,7 +516,7 @@ async function strike(a, d, opt) {
   const crit = !opt.noCrit && grng() < critOf(a);
   const fm = flankMult(a, d);
   const charged = !!a.charged;       // 競技場的蓄力地塊：下一次普通攻擊打完就消耗掉
-  const dmg = dmgCalc(a, d, { crit, mult: (opt.mult || 1) * (charged ? 2 : 1), noFlank: opt.noFlank });
+  const dmg = dmgCalc(a, d, { crit, mult: (opt.mult || 1) * (charged ? 1.5 : 1), noFlank: opt.noFlank });
   if (charged) {
     a.charged = false;
     addSt(a, a, { id: 'weaken', pct: 0.3, turns: 2 });

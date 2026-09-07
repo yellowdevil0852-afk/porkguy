@@ -43,6 +43,7 @@ async function enterShop() {
   log('<b class="up">── 商店開張：5 件商品依序拍賣 ──</b>');
   toast('商店開張！雙方輪流出價');
   refreshTop();
+  shopBanner();
   openShop();
   aiShopMaybeBid();
 }
@@ -140,6 +141,9 @@ async function exitShop() {
   await startTurn(0);
 }
 
+// 開商店的大字提示：黃色，飛到上面面板的回合數字那格
+function shopBanner() { showBanner('商店回合', 'shop', $('turnNo'), 900); }
+
 /* ── 商店面板 ── */
 
 function openShop() {
@@ -166,12 +170,15 @@ function refreshShopUI() {
   $('shopCur').innerHTML = `<h5 class="q${item.q}">${shopItemName(item)}<em>${QN[item.q]}・${shopItemType(item)}</em></h5>
     <p>${shopItemDesc(item)}</p>
     <div class="sr">目前出價　<b>${s.bidder >= 0 ? s.bid + ' 金幣（' + SIDE_N[s.bidder] + '）' : '尚無人出價'}</b></div>
-    <div class="sr">最低加價　<b>${SHOP_MIN_RAISE(item.q)}</b>　　你的金幣　<b>${G.gold[mySide]}</b></div>`;
+    <div class="sr">最低加價　<b>${SHOP_MIN_RAISE(item.q)}</b></div>`;
 
+  $('shopMyGold').textContent = G.gold[mySide];
   $('shopWhoseTurn').innerHTML = `輪到 <b class="s${s.turn}">${SIDE_N[s.turn]}</b>` +
     (mode === 'online' ? (myGo ? '（你）' : '（對手，請稍候）') : '');
   const amt = $('shopBidAmt');
   amt.min = min; amt.max = Math.max(min, G.gold[mySide]); amt.value = Math.min(min, G.gold[mySide]) || min;
+  $('shopMinus').disabled = !myGo || +amt.value <= min;
+  $('shopPlus').disabled = !myGo || +amt.value >= G.gold[mySide];
   $('shopBidBtn').disabled = !myGo || G.gold[mySide] < min;
   $('shopPassBtn').disabled = !myGo;
 }

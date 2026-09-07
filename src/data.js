@@ -35,9 +35,11 @@ const TER = {
   S: { n: '沼澤', cost: 3, def: -1, atk: 0, h: -0.10, col: 0x4d5c34, mire: 1 },
   W: { n: '深水', cost: 99, def: 0, atk: 0, h: -0.34, col: 0x1b4870 },
   T: { n: '王座', cost: 1, def: 2, atk: 0, h: 0.30, col: 0xb99539 },
-  C: { n: '營地', cost: 1, def: 2, atk: 0, h: 0.10, col: 0x9a8a68 }
+  C: { n: '營地', cost: 1, def: 2, atk: 0, h: 0.10, col: 0x9a8a68 },
+  // 石頭：不可通行，沒有任何數值加成，而且會擋住遠程／魔法的視線
+  K: { n: '石頭', cost: 99, def: 0, atk: 0, h: 0.45, col: 0x6b6f78, block: 1 }
 };
-const ORDER = ['R', 'P', 'F', 'M', 'S', 'W', 'T', 'C'];
+const ORDER = ['R', 'P', 'F', 'M', 'S', 'W', 'T', 'C', 'K'];
 
 // ── 攻擊 / 護甲類型（剋制三角）──
 //   法剋重甲、斬剋布甲、射剋輕甲
