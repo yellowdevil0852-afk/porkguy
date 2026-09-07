@@ -34,7 +34,7 @@ function serialize() {
       awake: u.awake, equip: u.equip, cds: u.cds, st: u.st, act: u.act, pas: u.pas, down: u.down,
       pts: u.pts, alloc: u.alloc, swapEq: u.swapEq, swapSk: u.swapSk
     })),
-    bag: G.bag, books: G.books, orbs: G.orbs, gorbs: G.gorbs, picks: G.picks,
+    bag: G.bag, books: G.books, orbs: G.orbs, gorbs: G.gorbs, gold: G.gold, picks: G.picks,
     chests: CHESTS.map(c => c.opened ? 1 : 0), traps: TRAPS, iid: itemSeq, bid: bookSeq
   };
 }
@@ -56,6 +56,7 @@ async function applySync(s) {
   G.books = s.books || [[], []];
   G.orbs = s.orbs || [[0,0,0,0,0],[0,0,0,0,0]];
   G.gorbs = s.gorbs || [[0,0,0,0,0],[0,0,0,0,0]];
+  G.gold = s.gold || [0, 0];
   G.news = [0, 0];
   G.picks = s.picks || [[], []];
   itemSeq = s.iid || 0; bookSeq = s.bid || 0;

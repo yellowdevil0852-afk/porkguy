@@ -13,8 +13,12 @@ let uidSeq = 0, itemSeq = 0, wakeSeq = 0;
 let grng = mulberry32(1);   // 所有「遊戲邏輯」的亂數，兩邊同步
 
 const byId = i => G.units.find(u => u.id === i);
-const alive = () => G.units.filter(u => u.alive);
-const unitAt = (x, y) => G.units.find(u => u.alive && u.x === x && u.y === y);
+// u.paused：進競技場時，凡是沒被傳送過去的單位（怪物、沒參賽的英雄）都在主
+// 戰場上原地凍結，但座標還留著舊地圖的數字。競技場地圖小，這些數字很容易
+// 剛好落在新地圖的範圍內，變成「憑空冒出來的鄰居」害路徑計算和選目標整個亂掉。
+// 用一個旗標把它們從所有空間查詢裡完全排除，離開競技場時再解除。
+const alive = () => G.units.filter(u => u.alive && !u.paused);
+const unitAt = (x, y) => G.units.find(u => u.alive && !u.paused && u.x === x && u.y === y);
 const dist = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));   // 正方形距離
 const base = u => u.side === 2 ? MON[u.kind] : CLS[u.cls];
@@ -437,6 +441,7 @@ async function animMove(u, path) {
 }
 
 async function openChest(u) {
+  if (G.arena) { await pickupArenaBuff(u); return; }
   const c = chestAt(u.x, u.y);
   if (!c || !isHero(u)) return;
   c.opened = true;
@@ -445,9 +450,11 @@ async function openChest(u) {
   const tbl = c.gold ? Q_TABLE.gold : Q_TABLE[3];
   const it = rollItem(rollQ(tbl));
   const kept = takeItem(u.side, it);
+  const coin = (c.gold ? 15 : 5) + Math.floor(grng() * (c.gold ? 11 : 6));
+  giveGold(u.side, coin);
   floatText(u.x, u.y, c.gold ? '金寶箱！' : '寶箱！', 'up');
   log(`<b>${nameOf(u)}</b> 打開${c.gold ? '金' : ''}寶箱，獲得 <span class="r${it.r}">${itemName(it)}</span> ` +
-      (kept ? itemStats(it) : '（自動分解）'));
+      (kept ? itemStats(it) : '（自動分解）') + `，還有 <b>${coin}</b> 金幣`);
   markNews(u.side);
   // 金寶箱一定附一本技能書，普通寶箱四成
   if (c.gold || grng() < 0.4) {
@@ -483,8 +490,14 @@ async function strike(a, d, opt) {
 
   const crit = !opt.noCrit && grng() < critOf(a);
   const fm = flankMult(a, d);
-  const dmg = dmgCalc(a, d, { crit, mult: opt.mult, noFlank: opt.noFlank });
-  const tag = (crit ? '暴擊 ' : '') + (opt.noFlank ? '' : flankName(fm) + (flankName(fm) ? ' ' : ''));
+  const charged = !!a.charged;       // 競技場的蓄力地塊：下一次普通攻擊打完就消耗掉
+  const dmg = dmgCalc(a, d, { crit, mult: (opt.mult || 1) * (charged ? 2 : 1), noFlank: opt.noFlank });
+  if (charged) {
+    a.charged = false;
+    addSt(a, a, { id: 'weaken', pct: 0.3, turns: 2 });
+  }
+  const tag = (crit ? '暴擊 ' : '') + (charged ? '蓄力 ' : '') +
+    (opt.noFlank ? '' : flankName(fm) + (flankName(fm) ? ' ' : ''));
 
   const real = absorb(d, dmg);
   a.stk = 0;                                        // 狂熱層數用掉了
@@ -541,6 +554,11 @@ async function projectile(a, d, type) {
 
 async function die(u, killer) {
   if (!u.alive) return;
+  // 競技場走自己的一套：不掉經驗、不進倒下復活、不算殲滅，純粹這一輪淘汰。
+  // 只攔截「正在競技場裡的參賽者」——主戰場上被凍結的怪物如果被殘留的
+  // 持續傷害（中毒／流血）拖死，還是要照正常流程處理，不然會去操作一個
+  // 從沒在競技場建過模型的單位，u.view 是 null 就直接爆炸。
+  if (G.arena && G.arena.participants.includes(u.id)) { await arenaDie(u); return; }
   if (lastStandCheck(u)) return;
   u.alive = false;
   // 殉道：倒下時把全隊拉起來
@@ -576,10 +594,14 @@ async function die(u, killer) {
     if (u.side === 2) monsterDrop(killer, u);
     killRefresh(killer);
   }
-  if (onCam(u)) {
+  // u.view 有可能是 null：競技場開打時會把全場（含怪物）的模型都先拆掉，
+  // 這時候如果凍結中的怪物被殘留的持續傷害拖死，onCam() 只看座標不看
+  // 有沒有模型，兩者組合起來就會想對一個不存在的模型播死亡動畫。
+  if (u.view && onCam(u)) {
     play(u, A.die, true);
     await wait(700);
     await tween(320, k => {
+      if (!u.view) return;
       u.view.g.traverse(c => {
         if (c.isMesh || c.isSkinnedMesh) { c.material.transparent = true; c.material.opacity = 1 - k; }
       });
@@ -1201,7 +1223,9 @@ async function doEndTurn(broadcast) {
   if (broadcast && mode === 'online') netSend({ t: 'end' });
   sel = null; phase = 'idle'; preMove = null;
   clearOverlay(); hideCard(); hideForecast(); closeSkillBar();
+  if (G.arena) { await arenaEndTurn(); return; }
   if (G.cur === 0) { await startTurn(1); return; }
+  if (G.turn % ARENA_INTERVAL === 0) { await enterArena(); return; }
   await monsterPhase();
   if (G.over) return;
   G.turn++;
@@ -1313,6 +1337,8 @@ function newGame(seed, picks) {
   G.hold = [0, 0]; G.bag = [[], []]; G.books = [[], []];
   G.orbs = [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0]];        // 技能精球
   G.gorbs = [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0]];       // 裝備精球
+  G.gold = [0, 0];                                    // 金幣
+  G.arena = null;                                     // 不在競技場時是 null
   G.news = [0, 0];                                    // 有沒有沒看過的新掉落
   G.picks = picks || [CLS_ORDER.slice(0, TEAM_SIZE), CLS_ORDER.slice(0, TEAM_SIZE)];
   PENDING = []; AURAS = []; bookSeq = 0;

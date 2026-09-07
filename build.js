@@ -18,7 +18,7 @@ for (const f of fs.readdirSync(p.join(R, 'raw/tex'))) {
   tex[f] = 'data:image/png;base64,' + b.toString('base64');
 }
 
-const SRC = ['data.js', 'settings.js', 'skills.js', 'world.js', 'vfx.js', 'status.js', 'rules.js', 'inv.js', 'ui.js', 'ai.js', 'net.js', 'main.js'];
+const SRC = ['data.js', 'settings.js', 'skills.js', 'world.js', 'vfx.js', 'status.js', 'rules.js', 'arena.js', 'inv.js', 'ui.js', 'ai.js', 'net.js', 'main.js'];
 const game = '(function(){\n"use strict";\n' +
   SRC.map(f => '/* ───── ' + f + ' ───── */\n' + fs.readFileSync(p.join(R, 'src', f), 'utf8')).join('\n') +
   '\n})();';

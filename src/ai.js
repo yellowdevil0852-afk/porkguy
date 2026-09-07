@@ -102,7 +102,7 @@ function aiPlan(u) {
       const step = r ? r.cost[key(sx, sy)] : 0;
 
       for (const t of G.units) {
-        if (!t.alive || t === u) continue;
+        if (!t.alive || t.paused || t === u) continue;
         const d = Math.abs(t.x - sx) + Math.abs(t.y - sy);
         if (d < 1 || d > rngOf(u)) continue;
 
@@ -205,7 +205,7 @@ async function aiTurn() {
     if (!aiOn || G.over) return;                 // 中途被關掉就交還控制權
     let best = null;
     for (const u of G.units) {
-      if (!u.alive || u.side !== AI_SIDE || (u.moved && u.acted)) continue;
+      if (!u.alive || u.paused || u.side !== AI_SIDE || (u.moved && u.acted)) continue;
       const p = aiPlan(u);
       if (p && (!best || p.score > best.score)) best = p;
     }

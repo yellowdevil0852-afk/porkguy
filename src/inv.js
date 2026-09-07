@@ -113,11 +113,26 @@ function takeItem(side, it) {
 
 /* ── 掉落 ── */
 // 每擊殺一隻怪兩次獨立判定：25% 裝備、15% 技能書
+// 金幣：怪群等級越高掉越多，不是機率而是固定小範圍——不然商店和競技場
+// 靠機率湊不出穩定的經濟，玩家永遠不知道自己下一次能不能出得起價
+function goldFromTier(tier) {
+  const range = { boss: [20, 30], 3: [6, 10], 2: [4, 7], 1: [2, 4] }[tier] || [2, 4];
+  return range[0] + Math.floor(grng() * (range[1] - range[0] + 1));
+}
+function giveGold(side, n) {
+  if (n <= 0) return;
+  G.gold[side] += n;
+  markNews(side);
+}
+
 function monsterDrop(killer, m) {
   if (!isHero(killer)) return;
   const tier = MON[m.kind].boss ? 'boss' : (m.tier || 1) * 2 - 1;
   const tbl = Q_TABLE[tier] || Q_TABLE[1];
   let got = false;
+  const gold = goldFromTier(MON[m.kind].boss ? 'boss' : (m.tier || 1));
+  giveGold(killer.side, gold);
+  floatText(m.x, m.y, '+' + gold + ' 金幣', 'up');
   if (grng() < 0.25) {
     const it = rollItem(rollQ(tbl));
     if (takeItem(killer.side, it)) {

@@ -250,14 +250,19 @@ const myTurnNow = () => G.cur < 2 && (mode !== 'online' || G.cur === myTeam);
 const playerSide = () => (G.cur < 2 ? G.cur : (G.lastSide || 0));
 
 function refreshTop() {
-  $('turnNo').textContent = '第 ' + G.turn + ' 回合';
+  $('turnNo').textContent = G.arena ? '競技場・第 ' + G.arena.round + ' 輪' : '第 ' + G.turn + ' 回合';
   const w = $('turnWho');
   w.className = 's' + G.cur + (myTurnNow() ? ' mine' : '');
   w.innerHTML = `<i class="dot s${G.cur}"></i>${turnLabel()}` +
     (mode === 'online' ? `<em>${SIDE_N[G.cur]}</em>` : '');
-  const c = s => alive().filter(u => u.side === s).length;
-  $('force').innerHTML = `<span class="s0">${c(0)}</span> : <span class="s1">${c(1)}</span>` +
-    `<span class="mons">　魔物 ${c(2)}</span>`;
+  if (G.arena) {
+    $('force').innerHTML = `<span class="s0">${G.arena.wins[0]}</span> : <span class="s1">${G.arena.wins[1]}</span>` +
+      `<span class="mons">　先拿 ${ARENA_WINS} 分</span>`;
+  } else {
+    const c = s => alive().filter(u => u.side === s).length;
+    $('force').innerHTML = `<span class="s0">${c(0)}</span> : <span class="s1">${c(1)}</span>` +
+      `<span class="mons">　魔物 ${c(2)}</span>`;
+  }
   for (const s of [0, 1]) {
     const el = $('hold' + s);
     el.textContent = G.hold[s];
@@ -313,13 +318,14 @@ function turnBanner() {
 function refreshRoster() {
   const box = $('roster');
   const side = mode === 'online' ? myTeam : playerSide();
+  $('goldNum').textContent = G.gold[side];
   const list = G.units.filter(u => u.side === side);
   box.innerHTML = '';
   for (const u of list) {
     const d = document.createElement('div');
     d.className = 'rr' + (u.alive ? '' : ' dead') + (u.moved && u.acted ? ' done' : '') + (sel === u ? ' sel' : '');
     const r = u.alive ? Math.max(0, u.hp) / mhpOf(u) : 0;
-    const tail = u.alive ? 'Lv' + u.lv : u.down + ' 回合後復活';
+    const tail = u.alive ? 'Lv' + u.lv : (G.arena ? '競技場淘汰' : u.down + ' 回合後復活');
     d.innerHTML = `<div class="rn">${nameOf(u)}<span>${tail}</span></div>
       <div class="rb"><i style="width:${r * 100}%"></i></div>`;
     d.onclick = () => {
@@ -721,7 +727,7 @@ function buildCard(u) {
     <div class="hc-top">
       <img class="hc-face" src="${PORTRAIT[u.cls]}" alt="">
       <span class="hc-name">${nameOf(u)}</span>
-      <span class="hc-lv">${u.alive ? 'Lv.' + u.lv : u.down + ' 回合後復活'}</span>
+      <span class="hc-lv">${u.alive ? 'Lv.' + u.lv : (G.arena ? '競技場淘汰' : u.down + ' 回合後復活')}</span>
       <button class="hc-auto" title="自動裝上最好的裝備和技能">一鍵</button>
     </div>
     <div class="hc-bar"><i style="width:${r * 100}%"></i></div>

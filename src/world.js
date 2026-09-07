@@ -483,6 +483,34 @@ function refreshPending() {
   }
 }
 
+// 競技場的一次性增益地塊：金色是力量增幅、紫色是蓄力，撿走就從畫面上消失
+let arenaBuffGroup = null;
+function refreshArenaBuffTiles() {
+  if (arenaBuffGroup) fxGroup.remove(arenaBuffGroup);
+  arenaBuffGroup = new THREE.Group();
+  fxGroup.add(arenaBuffGroup);
+  for (const key in ARENA_BUFFS) {
+    const [x, y] = key.split(',').map(Number);
+    const col = ARENA_BUFFS[key] === 'power' ? 0xffcf5c : 0xb07dff;
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(TILE * 0.28, TILE * 0.4, 20),
+      new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.8,
+        side: THREE.DoubleSide, depthWrite: false, fog: false })
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(wx(x), ter(x, y).h + 0.07, wz(y));
+    arenaBuffGroup.add(ring);
+    const glow = new THREE.Mesh(
+      new THREE.PlaneGeometry(TILE * 0.55, TILE * 0.55),
+      new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.28,
+        depthWrite: false, fog: false })
+    );
+    glow.rotation.x = -Math.PI / 2;
+    glow.position.set(wx(x), ter(x, y).h + 0.04, wz(y));
+    arenaBuffGroup.add(glow);
+  }
+}
+
 /* ── 單位模型 ── */
 
 /* ── 角色頭像 ──

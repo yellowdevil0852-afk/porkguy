@@ -66,8 +66,12 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
 .eq span{color:var(--dim);font-size:10px}
 .eq.empty{opacity:.45}
 
-/* 隊伍列 */
-#roster{position:absolute;left:10px;bottom:14px;width:170px;display:flex;flex-direction:column;gap:5px}
+/* 隊伍列 + 金幣，金幣在上面 */
+#hudLeft{position:absolute;left:10px;bottom:14px;width:170px;display:flex;flex-direction:column;gap:5px}
+#roster{display:flex;flex-direction:column;gap:5px}
+#goldBadge{display:flex;align-items:center;gap:5px;background:var(--panel);border:1px solid var(--line);
+  border-radius:8px;padding:5px 9px;font-weight:700;font-size:13px;color:var(--gold);align-self:flex-start}
+#goldBadge i{font-style:normal;font-size:15px}
 .rr{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 9px;
   cursor:pointer;transition:.12s}
 .rr:hover{border-color:var(--gold)}
