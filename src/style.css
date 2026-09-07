@@ -317,6 +317,8 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
 /* ── 等著重生的怪 ── */
 .resp{position:absolute;transform:translate(-50%,-50%);color:#ff8f7d;font-size:13px;
   font-weight:800;text-shadow:0 1px 4px #000,0 0 8px #000;pointer-events:none}
+.resp.s0{color:#8fc0ff}   /* 倒下的英雄用自己的隊伍色，跟怪物重生的紅圈分開 */
+.resp.s1{color:#ff9a8a}
 
 /* ── 還沒行動的單位（按結束回合時提醒）── */
 .tag.idle .nm{color:#ffd35c!important;animation:idleBlink .9s ease-in-out infinite}

@@ -142,17 +142,19 @@ async function boot() {
   };
   $('pickGo').onclick = () => { const p = pickSel.slice(); pickThen(p); };
   $('pickBack').onclick = () => {
-    if (net.peer) { net.peer.destroy(); net.peer = null; }
+    destroyPeer();
     mode = 'local';
     $('mPick').classList.add('hide'); $('mMain').classList.remove('hide');
   };
   $('mOnline').onclick = () => { $('mMain').classList.add('hide'); $('mNet').classList.remove('hide'); };
-  $('mBack').onclick = () => { $('mNet').classList.add('hide'); $('mMain').classList.remove('hide'); };
+  // 之前這裡沒收拾 net.peer：連線卡住時按返回，舊的連線嘗試會留在背景，
+  // 再按一次〔加入〕就會有兩個 Peer 物件同時搶著跑，狀態全亂掉。
+  $('mBack').onclick = () => { destroyPeer(); $('mNet').classList.add('hide'); $('mMain').classList.remove('hide'); };
   $('mHost').onclick = startHost;
   $('mJoin').onclick = startJoin;
   $('mCode').onkeydown = e => { if (e.key === 'Enter') startJoin(); };
   $('mCancelHost').onclick = () => {
-    if (net.peer) { net.peer.destroy(); net.peer = null; }
+    destroyPeer();
     $('mWait').classList.add('hide'); $('mMain').classList.remove('hide');
   };
   const sizeBox = $('mSize');

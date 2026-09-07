@@ -71,7 +71,7 @@ async function applySync(s) {
   camTarget.set(wx(CAMP[myTeam][0]), 0, wz(CAMP[myTeam][1]));
   camAz = myTeam === 0 ? Math.PI * 0.25 : Math.PI * 1.25;
   updCam();
-  dimDone(); refreshTop(); refreshRoster(); drawMinimap(); refreshBadge();
+  refreshRespawn(); dimDone(); refreshTop(); refreshRoster(); drawMinimap(); refreshBadge();
 }
 
 async function onNetData(m) {
@@ -93,7 +93,22 @@ async function onNetData(m) {
   else if (m.t === 'pick') onGuestPick(m.cls);
 }
 
+// 收拾目前的連線嘗試 —— 換頁面、按返回、或重新按一次建立/加入之前都要先呼叫，
+// 不然舊的 Peer 物件還留著，新舊兩個連線嘗試會同時搶著改 net.conn，狀態會亂掉。
+function destroyPeer() {
+  clearConnTimer();
+  if (net.peer) { try { net.peer.destroy(); } catch (e) {} net.peer = null; }
+  net.conn = null;
+}
+let connTimer = null;
+function clearConnTimer() { if (connTimer) { clearTimeout(connTimer); connTimer = null; } }
+// WebRTC 的兩端協商偶爾會卡住不動、也不觸發任何 error 事件（常見於某些防火牆／
+// 對稱式 NAT），這時候畫面會停在「連線中…」動也不動、使用者完全不知道發生什麼事。
+// 用逾時把這種情況攔下來，至少給個明確的訊息和收拾乾淨的狀態，能夠重新再試一次。
+const CONN_TIMEOUT = 15000;
+
 function startHost() {
+  destroyPeer();
   const code = mkCode();
   $('mNet').classList.add('hide');
   $('mWait').classList.remove('hide');
@@ -102,31 +117,43 @@ function startHost() {
   net.peer = new Peer(PREFIX + code, { debug: 0 });
   net.peer.on('open', () => { $('mWaitNote').textContent = '房間已開啟，等待對手加入…'; });
   net.peer.on('connection', c => {
+    clearConnTimer();
     const fresh = !$('menu').classList.contains('hide');
     hookConn(c);
     if (fresh) { mode = 'online'; myTeam = 0; hostPick = null; guestPick = null; hostPickFlow(); }
   });
   net.peer.on('error', e => {
+    clearConnTimer();
     $('mWaitNote').textContent = e.type === 'unavailable-id'
       ? '房號重複，請再按一次建立房間' : '無法連上信令伺服器：' + e.type;
   });
+  connTimer = setTimeout(() => {
+    $('mWaitNote').textContent = '一直連不上信令伺服器，檢查網路後重新建立房間';
+  }, CONN_TIMEOUT);
 }
 
 function startJoin() {
   const code = $('mCode').value.trim().toUpperCase();
   if (code.length !== 6) { $('mNetNote').textContent = '請輸入 6 碼房號'; return; }
+  destroyPeer();
   $('mNetNote').textContent = '連線中…';
   net.host = false;
   net.peer = new Peer({ debug: 0 });
   net.peer.on('open', () => {
     const c = net.peer.connect(PREFIX + code, { reliable: true });
     hookConn(c);
-    c.on('open', () => { mode = 'online'; myTeam = 1; guestPickFlow(); });
+    c.on('open', () => { clearConnTimer(); mode = 'online'; myTeam = 1; guestPickFlow(); });
   });
   net.peer.on('error', e => {
+    clearConnTimer();
     $('mNetNote').textContent = e.type === 'peer-unavailable'
       ? '找不到這個房間，確認房號是否正確' : '連線失敗：' + e.type;
   });
+  connTimer = setTimeout(() => {
+    $('mNetNote').textContent = '連線逾時 —— 雙方其中一邊的網路可能擋掉了 WebRTC。' +
+      '換一個網路（例如手機熱點）試試，或請房主重新建立房間。';
+    destroyPeer();
+  }, CONN_TIMEOUT);
 }
 
 

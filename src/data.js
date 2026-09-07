@@ -8,7 +8,7 @@ let THRONE = [13, 13];                   // 正中央，setSize() 會重算
 const THRONE_WIN = 5;                    // 連續佔領幾回合獲勝
 const AGGRO = 3;                         // 怪物驚醒距離
 const LEASH = 8;                         // 怪物離營地最遠追多少格
-const REVIVE_TURNS = 1;                  // 英雄倒下後幾回合在營地復活
+const REVIVE_TURNS = 3;                  // 英雄倒下後幾回合在營地復活
 const REVIVE_DASH = 2;                   // 復活後兩回合的額外移動力
 const CAMP_HEAL = 0.25;                  // 站在營地周圍一格，每回合回復最大生命的幾成
 // 怪群等級（依營地離王座的遠近）。英雄封頂 Lv10，這裡拉高到 7，

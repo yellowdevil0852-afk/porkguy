@@ -406,17 +406,35 @@ function spinGold(t) {
 
 // 等著重生的怪：地上一圈紅環，中間的倒數由 DOM 標籤顯示
 let respGroup = null;
+// 倒下的怪物在原本的營地重生，倒下的英雄回自家營地 —— 兩種都在地上畫一圈
+// 倒數，玩家才看得出「這傢伙什麼時候會回來」，不用點開名冊猜。
+const RESPAWN_OFFSET = [[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1]];   // 同一營地一次倒好幾個時錯開位置
+function respawnSpot(u) {
+  if (u.spawnAt) return u.spawnAt;
+  let cx, cy, siblings;
+  if (u.side === 2) {
+    const c = CAMPS[u.camp] || { x: u.home[0], y: u.home[1] };
+    cx = c.x; cy = c.y;
+    siblings = G.units.filter(o => o.side === 2 && o.camp === u.camp && !o.alive && o.down > 0);
+  } else {
+    [cx, cy] = CAMP[u.side];
+    siblings = G.units.filter(o => o.side === u.side && isHero(o) && !o.alive && o.down > 0);
+  }
+  const i = siblings.indexOf(u);
+  const off = RESPAWN_OFFSET[i % RESPAWN_OFFSET.length];
+  return (u.spawnAt = [cx + off[0], cy + off[1]]);
+}
 function refreshRespawn() {
   if (respGroup) fxGroup.remove(respGroup);
   respGroup = new THREE.Group();
   fxGroup.add(respGroup);
   for (const u of G.units) {
-    if (u.side !== 2 || u.alive || !u.down) continue;
-    const c = CAMPS[u.camp] || { x: u.home[0], y: u.home[1] };
-    const spot = u.spawnAt || (u.spawnAt = [c.x, c.y]);
+    if (u.alive || !u.down) continue;
+    const spot = respawnSpot(u);
+    if (!inBoard(spot[0], spot[1])) continue;
     const m = new THREE.Mesh(
       new THREE.RingGeometry(TILE * 0.30, TILE * 0.44, 26),
-      new THREE.MeshBasicMaterial({ color: 0xff4433, transparent: true, opacity: 0.55,
+      new THREE.MeshBasicMaterial({ color: u.side === 2 ? 0xff4433 : SIDE_COL[u.side], transparent: true, opacity: 0.55,
         side: THREE.DoubleSide, depthWrite: false, fog: false })
     );
     m.rotation.x = -Math.PI / 2;

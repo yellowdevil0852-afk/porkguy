@@ -53,11 +53,11 @@ function projectTags() {
   drawReticle();
 }
 
-/* ── 等著重生的怪：地上紅圈中間顯示還有幾回合 ── */
+/* ── 等著重生的單位（怪物或倒下的英雄）：地上圈裡顯示還有幾回合 ── */
 const respTags = [];
 function refreshRespawnTags() {
   const box = $('tags');
-  const list = G.units.filter(u => u.side === 2 && !u.alive && u.down > 0);
+  const list = G.units.filter(u => !u.alive && u.down > 0);
   while (respTags.length > list.length) respTags.pop().remove();
   while (respTags.length < list.length) {
     const d = document.createElement('div');
@@ -67,12 +67,13 @@ function refreshRespawnTags() {
   }
   list.forEach((u, i) => {
     respTags[i].textContent = u.down;
+    respTags[i].className = 'resp' + (u.side !== 2 ? ' s' + u.side : '');
     respTags[i].dataset.uid = u.id;
   });
 }
 function drawRespawnTags() {
   if (!respTags.length) return;
-  const list = G.units.filter(u => u.side === 2 && !u.alive && u.down > 0);
+  const list = G.units.filter(u => !u.alive && u.down > 0);
   list.forEach((u, i) => {
     const el = respTags[i];
     if (!el) return;
@@ -318,7 +319,7 @@ function refreshRoster() {
     const d = document.createElement('div');
     d.className = 'rr' + (u.alive ? '' : ' dead') + (u.moved && u.acted ? ' done' : '') + (sel === u ? ' sel' : '');
     const r = u.alive ? Math.max(0, u.hp) / mhpOf(u) : 0;
-    const tail = u.alive ? 'Lv' + u.lv : '倒下 ' + u.down;
+    const tail = u.alive ? 'Lv' + u.lv : u.down + ' 回合後復活';
     d.innerHTML = `<div class="rn">${nameOf(u)}<span>${tail}</span></div>
       <div class="rb"><i style="width:${r * 100}%"></i></div>`;
     d.onclick = () => {
@@ -720,7 +721,7 @@ function buildCard(u) {
     <div class="hc-top">
       <img class="hc-face" src="${PORTRAIT[u.cls]}" alt="">
       <span class="hc-name">${nameOf(u)}</span>
-      <span class="hc-lv">${u.alive ? 'Lv.' + u.lv : '倒下 ' + u.down}</span>
+      <span class="hc-lv">${u.alive ? 'Lv.' + u.lv : u.down + ' 回合後復活'}</span>
       <button class="hc-auto" title="自動裝上最好的裝備和技能">一鍵</button>
     </div>
     <div class="hc-bar"><i style="width:${r * 100}%"></i></div>

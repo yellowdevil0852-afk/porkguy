@@ -586,7 +586,7 @@ async function die(u, killer) {
     });
   }
   removeView(u);
-  if (u.side === 2) refreshRespawn();
+  refreshRespawn();   // 兩邊都要重畫：英雄倒下也要在自家營地畫倒數圈
 }
 
 /* ── 行動 ── */
@@ -1138,6 +1138,7 @@ async function startTurn(side) {
   if (G.hold[side] >= THRONE_WIN) { endGame(side, '佔領王座滿 ' + THRONE_WIN + ' 回合'); return; }
 
   // 倒下的英雄倒數，時間到就在營地重新站起來
+  let anyRevived = false;
   for (const u of G.units) {
     if (u.side !== side || u.alive || !isHero(u)) continue;
     if (--u.down > 0) continue;
@@ -1147,9 +1148,12 @@ async function startTurn(side) {
     u.hp = Math.ceil(mhpOf(u) / 2);
     u.st = [{ id: 'mov', v: REVIVE_DASH, turns: 3 }];   // 剛回來的兩個回合腳程快一點
     u.turned = false; u.dir = side === 0 ? 3 : 7;
+    u.spawnAt = null;                                   // 下次倒下要重算位置，不要沿用舊的
     buildUnitView(u); makeTag(u);
     log(`<span class="up">${nameOf(u)} 在營地重新站了起來</span>`);
+    anyRevived = true;
   }
+  if (anyRevived) refreshRespawn();   // 清掉復活那個人的倒數圈，其他還沒好的維持顯示
   for (const u of G.units) {
     if (u.side !== side) continue;
     u.moved = false; u.acted = false; u.turned = false; u.hitOnce = 0;

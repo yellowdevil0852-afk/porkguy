@@ -323,6 +323,8 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
 /* ── 等著重生的怪 ── */
 .resp{position:absolute;transform:translate(-50%,-50%);color:#ff8f7d;font-size:13px;
   font-weight:800;text-shadow:0 1px 4px #000,0 0 8px #000;pointer-events:none}
+.resp.s0{color:#8fc0ff}   /* 倒下的英雄用自己的隊伍色，跟怪物重生的紅圈分開 */
+.resp.s1{color:#ff9a8a}
 
 /* ── 還沒行動的單位（按結束回合時提醒）── */
 .tag.idle .nm{color:#ffd35c!important;animation:idleBlink .9s ease-in-out infinite}
@@ -592,8 +594,9 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
       下一回合一樣會在營地站起來。
 
       <h3>倒下與復活</h3>
-      英雄的生命歸零時不會永久死亡，而是倒下，<em>下個回合就在自家營地重新站起來</em>，
-      生命回到一半、損失三成經驗，並獲得<em>兩回合 +2 移動</em>方便歸隊。裝備和等級都會保留。<br>
+      英雄的生命歸零時不會永久死亡，而是倒下，<em>3 個回合後在自家營地重新站起來</em>，
+      生命回到一半、損失三成經驗，並獲得<em>兩回合 +2 移動</em>方便歸隊。裝備和等級都會保留。
+      倒下期間營地會有一圈自己隊伍顏色的倒數圈，清楚看得到還要幾回合才會回來。<br>
       站在<em>自家營地周圍一格</em>的單位，每回合開始會回復最大生命的四分之一。
 
       <h3>回合</h3>
@@ -4916,7 +4919,7 @@ let THRONE = [13, 13];                   // 正中央，setSize() 會重算
 const THRONE_WIN = 5;                    // 連續佔領幾回合獲勝
 const AGGRO = 3;                         // 怪物驚醒距離
 const LEASH = 8;                         // 怪物離營地最遠追多少格
-const REVIVE_TURNS = 1;                  // 英雄倒下後幾回合在營地復活
+const REVIVE_TURNS = 3;                  // 英雄倒下後幾回合在營地復活
 const REVIVE_DASH = 2;                   // 復活後兩回合的額外移動力
 const CAMP_HEAL = 0.25;                  // 站在營地周圍一格，每回合回復最大生命的幾成
 // 怪群等級（依營地離王座的遠近）。英雄封頂 Lv10，這裡拉高到 7，
@@ -5903,17 +5906,35 @@ function spinGold(t) {
 
 // 等著重生的怪：地上一圈紅環，中間的倒數由 DOM 標籤顯示
 let respGroup = null;
+// 倒下的怪物在原本的營地重生，倒下的英雄回自家營地 —— 兩種都在地上畫一圈
+// 倒數，玩家才看得出「這傢伙什麼時候會回來」，不用點開名冊猜。
+const RESPAWN_OFFSET = [[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1]];   // 同一營地一次倒好幾個時錯開位置
+function respawnSpot(u) {
+  if (u.spawnAt) return u.spawnAt;
+  let cx, cy, siblings;
+  if (u.side === 2) {
+    const c = CAMPS[u.camp] || { x: u.home[0], y: u.home[1] };
+    cx = c.x; cy = c.y;
+    siblings = G.units.filter(o => o.side === 2 && o.camp === u.camp && !o.alive && o.down > 0);
+  } else {
+    [cx, cy] = CAMP[u.side];
+    siblings = G.units.filter(o => o.side === u.side && isHero(o) && !o.alive && o.down > 0);
+  }
+  const i = siblings.indexOf(u);
+  const off = RESPAWN_OFFSET[i % RESPAWN_OFFSET.length];
+  return (u.spawnAt = [cx + off[0], cy + off[1]]);
+}
 function refreshRespawn() {
   if (respGroup) fxGroup.remove(respGroup);
   respGroup = new THREE.Group();
   fxGroup.add(respGroup);
   for (const u of G.units) {
-    if (u.side !== 2 || u.alive || !u.down) continue;
-    const c = CAMPS[u.camp] || { x: u.home[0], y: u.home[1] };
-    const spot = u.spawnAt || (u.spawnAt = [c.x, c.y]);
+    if (u.alive || !u.down) continue;
+    const spot = respawnSpot(u);
+    if (!inBoard(spot[0], spot[1])) continue;
     const m = new THREE.Mesh(
       new THREE.RingGeometry(TILE * 0.30, TILE * 0.44, 26),
-      new THREE.MeshBasicMaterial({ color: 0xff4433, transparent: true, opacity: 0.55,
+      new THREE.MeshBasicMaterial({ color: u.side === 2 ? 0xff4433 : SIDE_COL[u.side], transparent: true, opacity: 0.55,
         side: THREE.DoubleSide, depthWrite: false, fog: false })
     );
     m.rotation.x = -Math.PI / 2;
@@ -7049,7 +7070,7 @@ async function die(u, killer) {
     });
   }
   removeView(u);
-  if (u.side === 2) refreshRespawn();
+  refreshRespawn();   // 兩邊都要重畫：英雄倒下也要在自家營地畫倒數圈
 }
 
 /* ── 行動 ── */
@@ -7601,6 +7622,7 @@ async function startTurn(side) {
   if (G.hold[side] >= THRONE_WIN) { endGame(side, '佔領王座滿 ' + THRONE_WIN + ' 回合'); return; }
 
   // 倒下的英雄倒數，時間到就在營地重新站起來
+  let anyRevived = false;
   for (const u of G.units) {
     if (u.side !== side || u.alive || !isHero(u)) continue;
     if (--u.down > 0) continue;
@@ -7610,9 +7632,12 @@ async function startTurn(side) {
     u.hp = Math.ceil(mhpOf(u) / 2);
     u.st = [{ id: 'mov', v: REVIVE_DASH, turns: 3 }];   // 剛回來的兩個回合腳程快一點
     u.turned = false; u.dir = side === 0 ? 3 : 7;
+    u.spawnAt = null;                                   // 下次倒下要重算位置，不要沿用舊的
     buildUnitView(u); makeTag(u);
     log(`<span class="up">${nameOf(u)} 在營地重新站了起來</span>`);
+    anyRevived = true;
   }
+  if (anyRevived) refreshRespawn();   // 清掉復活那個人的倒數圈，其他還沒好的維持顯示
   for (const u of G.units) {
     if (u.side !== side) continue;
     u.moved = false; u.acted = false; u.turned = false; u.hitOnce = 0;
@@ -8016,11 +8041,11 @@ function projectTags() {
   drawReticle();
 }
 
-/* ── 等著重生的怪：地上紅圈中間顯示還有幾回合 ── */
+/* ── 等著重生的單位（怪物或倒下的英雄）：地上圈裡顯示還有幾回合 ── */
 const respTags = [];
 function refreshRespawnTags() {
   const box = $('tags');
-  const list = G.units.filter(u => u.side === 2 && !u.alive && u.down > 0);
+  const list = G.units.filter(u => !u.alive && u.down > 0);
   while (respTags.length > list.length) respTags.pop().remove();
   while (respTags.length < list.length) {
     const d = document.createElement('div');
@@ -8030,12 +8055,13 @@ function refreshRespawnTags() {
   }
   list.forEach((u, i) => {
     respTags[i].textContent = u.down;
+    respTags[i].className = 'resp' + (u.side !== 2 ? ' s' + u.side : '');
     respTags[i].dataset.uid = u.id;
   });
 }
 function drawRespawnTags() {
   if (!respTags.length) return;
-  const list = G.units.filter(u => u.side === 2 && !u.alive && u.down > 0);
+  const list = G.units.filter(u => !u.alive && u.down > 0);
   list.forEach((u, i) => {
     const el = respTags[i];
     if (!el) return;
@@ -8281,7 +8307,7 @@ function refreshRoster() {
     const d = document.createElement('div');
     d.className = 'rr' + (u.alive ? '' : ' dead') + (u.moved && u.acted ? ' done' : '') + (sel === u ? ' sel' : '');
     const r = u.alive ? Math.max(0, u.hp) / mhpOf(u) : 0;
-    const tail = u.alive ? 'Lv' + u.lv : '倒下 ' + u.down;
+    const tail = u.alive ? 'Lv' + u.lv : u.down + ' 回合後復活';
     d.innerHTML = `<div class="rn">${nameOf(u)}<span>${tail}</span></div>
       <div class="rb"><i style="width:${r * 100}%"></i></div>`;
     d.onclick = () => {
@@ -8683,7 +8709,7 @@ function buildCard(u) {
     <div class="hc-top">
       <img class="hc-face" src="${PORTRAIT[u.cls]}" alt="">
       <span class="hc-name">${nameOf(u)}</span>
-      <span class="hc-lv">${u.alive ? 'Lv.' + u.lv : '倒下 ' + u.down}</span>
+      <span class="hc-lv">${u.alive ? 'Lv.' + u.lv : u.down + ' 回合後復活'}</span>
       <button class="hc-auto" title="自動裝上最好的裝備和技能">一鍵</button>
     </div>
     <div class="hc-bar"><i style="width:${r * 100}%"></i></div>
@@ -9650,7 +9676,7 @@ async function applySync(s) {
   camTarget.set(wx(CAMP[myTeam][0]), 0, wz(CAMP[myTeam][1]));
   camAz = myTeam === 0 ? Math.PI * 0.25 : Math.PI * 1.25;
   updCam();
-  dimDone(); refreshTop(); refreshRoster(); drawMinimap(); refreshBadge();
+  refreshRespawn(); dimDone(); refreshTop(); refreshRoster(); drawMinimap(); refreshBadge();
 }
 
 async function onNetData(m) {
@@ -9672,7 +9698,22 @@ async function onNetData(m) {
   else if (m.t === 'pick') onGuestPick(m.cls);
 }
 
+// 收拾目前的連線嘗試 —— 換頁面、按返回、或重新按一次建立/加入之前都要先呼叫，
+// 不然舊的 Peer 物件還留著，新舊兩個連線嘗試會同時搶著改 net.conn，狀態會亂掉。
+function destroyPeer() {
+  clearConnTimer();
+  if (net.peer) { try { net.peer.destroy(); } catch (e) {} net.peer = null; }
+  net.conn = null;
+}
+let connTimer = null;
+function clearConnTimer() { if (connTimer) { clearTimeout(connTimer); connTimer = null; } }
+// WebRTC 的兩端協商偶爾會卡住不動、也不觸發任何 error 事件（常見於某些防火牆／
+// 對稱式 NAT），這時候畫面會停在「連線中…」動也不動、使用者完全不知道發生什麼事。
+// 用逾時把這種情況攔下來，至少給個明確的訊息和收拾乾淨的狀態，能夠重新再試一次。
+const CONN_TIMEOUT = 15000;
+
 function startHost() {
+  destroyPeer();
   const code = mkCode();
   $('mNet').classList.add('hide');
   $('mWait').classList.remove('hide');
@@ -9681,31 +9722,43 @@ function startHost() {
   net.peer = new Peer(PREFIX + code, { debug: 0 });
   net.peer.on('open', () => { $('mWaitNote').textContent = '房間已開啟，等待對手加入…'; });
   net.peer.on('connection', c => {
+    clearConnTimer();
     const fresh = !$('menu').classList.contains('hide');
     hookConn(c);
     if (fresh) { mode = 'online'; myTeam = 0; hostPick = null; guestPick = null; hostPickFlow(); }
   });
   net.peer.on('error', e => {
+    clearConnTimer();
     $('mWaitNote').textContent = e.type === 'unavailable-id'
       ? '房號重複，請再按一次建立房間' : '無法連上信令伺服器：' + e.type;
   });
+  connTimer = setTimeout(() => {
+    $('mWaitNote').textContent = '一直連不上信令伺服器，檢查網路後重新建立房間';
+  }, CONN_TIMEOUT);
 }
 
 function startJoin() {
   const code = $('mCode').value.trim().toUpperCase();
   if (code.length !== 6) { $('mNetNote').textContent = '請輸入 6 碼房號'; return; }
+  destroyPeer();
   $('mNetNote').textContent = '連線中…';
   net.host = false;
   net.peer = new Peer({ debug: 0 });
   net.peer.on('open', () => {
     const c = net.peer.connect(PREFIX + code, { reliable: true });
     hookConn(c);
-    c.on('open', () => { mode = 'online'; myTeam = 1; guestPickFlow(); });
+    c.on('open', () => { clearConnTimer(); mode = 'online'; myTeam = 1; guestPickFlow(); });
   });
   net.peer.on('error', e => {
+    clearConnTimer();
     $('mNetNote').textContent = e.type === 'peer-unavailable'
       ? '找不到這個房間，確認房號是否正確' : '連線失敗：' + e.type;
   });
+  connTimer = setTimeout(() => {
+    $('mNetNote').textContent = '連線逾時 —— 雙方其中一邊的網路可能擋掉了 WebRTC。' +
+      '換一個網路（例如手機熱點）試試，或請房主重新建立房間。';
+    destroyPeer();
+  }, CONN_TIMEOUT);
 }
 
 
@@ -9894,17 +9947,19 @@ async function boot() {
   };
   $('pickGo').onclick = () => { const p = pickSel.slice(); pickThen(p); };
   $('pickBack').onclick = () => {
-    if (net.peer) { net.peer.destroy(); net.peer = null; }
+    destroyPeer();
     mode = 'local';
     $('mPick').classList.add('hide'); $('mMain').classList.remove('hide');
   };
   $('mOnline').onclick = () => { $('mMain').classList.add('hide'); $('mNet').classList.remove('hide'); };
-  $('mBack').onclick = () => { $('mNet').classList.add('hide'); $('mMain').classList.remove('hide'); };
+  // 之前這裡沒收拾 net.peer：連線卡住時按返回，舊的連線嘗試會留在背景，
+  // 再按一次〔加入〕就會有兩個 Peer 物件同時搶著跑，狀態全亂掉。
+  $('mBack').onclick = () => { destroyPeer(); $('mNet').classList.add('hide'); $('mMain').classList.remove('hide'); };
   $('mHost').onclick = startHost;
   $('mJoin').onclick = startJoin;
   $('mCode').onkeydown = e => { if (e.key === 'Enter') startJoin(); };
   $('mCancelHost').onclick = () => {
-    if (net.peer) { net.peer.destroy(); net.peer = null; }
+    destroyPeer();
     $('mWait').classList.add('hide'); $('mMain').classList.remove('hide');
   };
   const sizeBox = $('mSize');
