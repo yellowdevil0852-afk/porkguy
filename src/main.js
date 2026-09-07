@@ -202,8 +202,13 @@ async function boot() {
   bindBagTabs();
   $('bagAuto').onclick = autoGearAll;
   $('bagClose').onclick = closeBag;
+  $('shopBidBtn').onclick = () => doShopBid(+$('shopBidAmt').value);
+  $('shopPassBtn').onclick = doShopPass;
+  $('bagPhaseSkip').onclick = doBagSkip;
   $('btnQuit').onclick = () => {
     if (net.peer) { net.peer.destroy(); net.peer = null; }
+    if (bagPhaseTimer) { clearInterval(bagPhaseTimer); bagPhaseTimer = null; }
+    G.bagPhase = null; G.shop = null;
     mode = 'local';
     $('hud').classList.add('hide');
     $('netTag').classList.add('hide');
@@ -211,6 +216,8 @@ async function boot() {
     $('mNet').classList.add('hide'); $('mWait').classList.add('hide');
     $('mMain').classList.remove('hide');
     $('result').classList.add('hide');
+    $('bagPhaseBar').classList.add('hide');
+    $('shopOv').classList.add('hide');
     closeBag();
   };
   $('btnUndo').onclick = () => {

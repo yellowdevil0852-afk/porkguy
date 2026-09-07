@@ -459,6 +459,37 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
 /* 上面面板的「輪到誰」 */
 #turnWho em{font-style:normal;font-size:10.5px;color:var(--dim);margin-left:5px}
 #turnWho.mine{color:var(--gold);font-weight:700}
+
+/* ══════════ 商店 ══════════ */
+#shopList{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:12px 0}
+.shItem{flex:0 0 100px;padding:7px 6px;border-radius:9px;background:#131a26;
+  border:1px solid var(--line);text-align:center;opacity:.55;transition:.15s}
+.shItem b{display:block;font-size:11.5px;font-weight:700;margin-bottom:2px}
+.shItem em{display:block;font-size:9px;color:var(--dim);font-style:normal}
+.shItem.cur{opacity:1;border-color:var(--gold);box-shadow:0 0 0 2px var(--gold);transform:translateY(-3px)}
+.shItem.done{opacity:.3}
+.shItem.q0 b{color:#c9d2e0} .shItem.q1 b{color:#5fd39a} .shItem.q2 b{color:#5aa2ff}
+.shItem.q3 b{color:#c07dff} .shItem.q4 b{color:#e8c168}
+#shopCur{background:#131a26;border:1px solid var(--line);border-radius:10px;
+  padding:12px 16px;text-align:left;margin-bottom:12px}
+#shopCur h5{display:flex;justify-content:space-between;align-items:baseline;font-size:15px}
+#shopCur h5 em{font-size:11px;color:var(--dim);font-style:normal;font-weight:400}
+#shopCur p{color:var(--dim);margin:5px 0 8px;font-size:12px}
+#shopCur .sr{display:flex;gap:6px;font-size:12px;padding:2px 0}
+#shopCur .sr b{color:var(--txt);font-weight:700}
+#shopBidRow{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
+#shopWhoseTurn{font-size:12.5px;color:var(--dim);margin-right:4px}
+#shopBidAmt{width:80px;padding:6px 8px;border-radius:7px;border:1px solid var(--line);
+  background:#0e141f;color:var(--txt);font:inherit;text-align:center}
+
+/* 背包回合的倒數列，固定在上面面板下方 */
+#bagPhaseBar{position:fixed;top:50px;left:50%;transform:translateX(-50%);z-index:20;
+  display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--gold);
+  border-radius:9px;padding:6px 14px;font-size:12.5px;zoom:var(--uiscale)}
+#bagPhaseClock{font-weight:800;color:var(--gold);font-size:14px;min-width:38px;text-align:center}
+#bagPhaseStatus span{margin-right:8px}
+#bagPhaseStatus .dim{color:var(--dim)}
+#bagPhaseSkip{font-size:11px;padding:4px 10px}
 </style>
 </head>
 <body>
@@ -585,6 +616,27 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
   </div>
 </div>
 
+<div id="shopOv" class="overlay hide">
+  <div class="card panel wide">
+    <h1 style="font-size:20px;letter-spacing:4px">商店</h1>
+    <div class="sub">SHOP · 回合制競標，由低到高依序拍賣</div>
+    <div id="shopList"></div>
+    <div id="shopCur"></div>
+    <div id="shopBidRow">
+      <span id="shopWhoseTurn"></span>
+      <input id="shopBidAmt" type="number">
+      <button class="prime" id="shopBidBtn">出價</button>
+      <button id="shopPassBtn">放棄</button>
+    </div>
+  </div>
+</div>
+
+<div id="bagPhaseBar" class="hide">
+  <span id="bagPhaseClock">1:00</span>
+  <span id="bagPhaseStatus"></span>
+  <button id="bagPhaseSkip">跳過背包回合</button>
+</div>
+
 <div id="help" class="overlay hide">
   <div class="card panel wide">
     <h1 style="font-size:20px;letter-spacing:4px">遊戲說明</h1>
@@ -631,7 +683,7 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
       輪到誰在上面的面板看得到；<em>輪到你的時候畫面中央會有大字提示</em>，
       不是你的回合時〔結束回合〕會變成「等待對手…」按不動。<br>
       連線是 WebRTC 點對點，遊戲資料不經過伺服器。
-      <em>不是自己的回合也可以開背包整理裝備和技能。</em>
+      <em>背包隨時能打開看，但要等背包回合才能真的裝卸</em>（見下面的說明）。
 
       <h3>戰鬥</h3>
       傷害 = (攻擊 + 地形攻) × 18 ÷ (18 + 防禦 + 地形防)——防禦越高減傷越多，
@@ -673,9 +725,10 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
       <em>技能欄：</em>主動技能槽在 <em>Lv.1 / 3 / 6</em> 各開一個，被動技能槽在 <em>Lv.4</em> 開。
       打開背包切到<em>技能</em>分頁，點角色牌上的技能欄，再點技能書就裝上；<em>雙擊技能欄</em>可以卸下。<br>
       <em>取得：</em>打怪 15% 掉技能書，寶箱也會掉（金寶箱必掉）。<br>
-      <em>換技能：</em><em>每個技能欄一回合只能換一次</em>（三個主動欄和被動欄各自算），
-      <em>卸下來不算一次</em>。換下來的技能書會退回背包，而且<em>冷卻不會重置</em>
-      （卸下來的技能照樣繼續冷卻）。這回合換過的欄位會標上 ✓。<br>
+      <em>換技能：</em>本機對戰<em>每個技能欄一回合只能換一次</em>（三個主動欄和被動欄各自算，
+      卸下來不算一次，換過的欄位會標上 ✓）；線上對戰改成<em>只有背包回合能換</em>，
+      那段時間內想換幾次都行。換下來的技能書會退回背包，而且<em>冷卻不會重置</em>
+      （卸下來的技能照樣繼續冷卻）。<br>
       <em>技能精球：</em>分解技能書會得到同品質的精球，<em>三顆可以合成一個高一階的技能</em>。<br>
       技能的傷害和治療<em>全部是攻擊力的百分比</em>，所以升級和換裝備都會一起變強 ——
       滑鼠移到技能上會顯示「百分比 ／ 實際數值」。同一個品質的技能總輸出是固定預算，
@@ -690,8 +743,8 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
       打怪 25% 掉裝備（和技能書<em>獨立計算</em>，可能同時掉）。<br>
       武器有職業限制（長弓只有遊俠拿得動、法杖只有法師和牧師能用），防具和飾品不限。
       背包裡會註明限用職業。卸下裝備：<em>雙擊裝備欄</em>，或把它拖回下面的背包。
-      <em>每個裝備欄一回合只能換一次</em>（武器、防具、飾品各自算），換過的欄位會標上 ✓。
-      <em>卸下來不算一次</em> —— 反悔把裝備拿下來之後，那一格這回合還是能重新裝一件。<br>
+      本機對戰<em>每個裝備欄一回合只能換一次</em>（武器、防具、飾品各自算，卸下來不算一次，
+      換過的欄位會標上 ✓）；線上對戰改成<em>只有背包回合能換</em>，見下面的說明。<br>
       懶得一件件挑的話，角色卡右上角有<em>一鍵</em>，背包上面有<em>全隊一鍵裝備</em> ——
       會自動換上背包裡分數最高的裝備，以及品質更高的技能。<br>
       用不到的裝備可以<em>分解成裝備精球</em>，一樣是三顆合成一個高一階的裝備。
@@ -735,7 +788,7 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
       但<em>王座半徑 5 格內的營地清掉就不會再回來</em>，所以中心地帶是可以真的打乾淨的。
 
       <h3>金幣</h3>
-      打怪、開寶箱、打競技場都會拿到金幣，顯示在左下角、隊伍名冊上方。目前唯一的用途是以後的商店。
+      打怪、開寶箱、打競技場都會拿到金幣，顯示在左下角、隊伍名冊上方，用來在商店競標。
 
       <h3>競技場</h3>
       每 5 回合結束，雙方所有還站著的英雄會被強制傳送到一個獨立的 16×16 競技場，
@@ -744,6 +797,18 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
       下一次普通攻擊 +100% 傷害、之後攻擊 −30%（3 回合），撿到立刻生效，用掉或撿完就消失。<br>
       競技場結束後所有人回到原本在主戰場的位置，<em>血量統一恢復到上限的一半</em>——
       這是進競技場的風險，贏家和輸家都拿金幣，贏家更多。
+
+      <h3>商店</h3>
+      每 3 回合結束開一次商店，5 件商品由低到高<em>依序拍賣</em>，其中保底一件金色。
+      拍賣是<em>回合制</em>：雙方輪流「加價」或「放棄」，不是搶快——放棄的話，
+      如果對方已經出過價，對方直接得標；如果兩邊都還沒出價就都放棄，這件商品流標。
+      最低加價門檻跟著品質走：白 10、綠 20、藍 30、紫 40、金 50，可以自己輸入加更多。
+
+      <h3>背包回合（僅線上對戰）</h3>
+      線上對戰時，每個人的回合結束後會插入一段 <em>60 秒的背包回合</em>，倒數會顯示在
+      上面面板下方，雙方都可以在這段時間自由裝備、卸下、換技能，不再是「每個欄位一回合一次」。
+      準備好了可以按<em>跳過背包回合</em>，等雙方都跳過或時間到才會繼續——過了這段時間，
+      要等下一個背包回合才能再動裝備跟技能，不過隨時都能打開背包看。
 
       <h3>地圖大小</h3>
       主選單可以選 16×16 到 64×64。地形、道路、營地、寶箱都是按比例生成的，
@@ -7754,12 +7819,21 @@ async function doEndTurn(broadcast) {
   sel = null; phase = 'idle'; preMove = null;
   clearOverlay(); hideCard(); hideForecast(); closeSkillBar();
   if (G.arena) { await arenaEndTurn(); return; }
-  if (G.cur === 0) { await startTurn(1); return; }
-  if (G.turn % ARENA_INTERVAL === 0) { await enterArena(); return; }
-  await monsterPhase();
-  if (G.over) return;
-  G.turn++;
-  await startTurn(0);
+
+  // 接下來原本該發生的事——包成一個延續函式，因為線上模式要先插一段
+  // 背包回合，等背包回合自己結束（逾時或雙方都跳過）才會繼續往下走
+  const proceed = async () => {
+    if (G.cur === 0) { await startTurn(1); return; }
+    if (G.turn % ARENA_INTERVAL === 0) { await enterArena(); return; }
+    if (G.turn % SHOP_INTERVAL === 0) { await enterShop(); return; }
+    await monsterPhase();
+    if (G.over) return;
+    G.turn++;
+    await startTurn(0);
+  };
+
+  if (mode === 'online') { enterBagPhase(proceed); return; }
+  await proceed();
 }
 
 /* ── 怪物 ── */
@@ -7869,6 +7943,8 @@ function newGame(seed, picks) {
   G.gorbs = [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0]];       // 裝備精球
   G.gold = [0, 0];                                    // 金幣
   G.arena = null;                                     // 不在競技場時是 null
+  G.shop = null;                                      // 不在商店時是 null
+  G.bagPhase = null;                                  // 不在背包回合時是 null
   G.news = [0, 0];                                    // 有沒有沒看過的新掉落
   G.picks = picks || [CLS_ORDER.slice(0, TEAM_SIZE), CLS_ORDER.slice(0, TEAM_SIZE)];
   PENDING = []; AURAS = []; bookSeq = 0;
@@ -8136,6 +8212,261 @@ async function pickupArenaBuff(u) {
   await wait(250);
 }
 
+/* ───── shop.js ───── */
+/* ══════════════ 商店 ══════════════
+   每 SHOP_INTERVAL 回合結束，開一次商店：5 件商品依品質由低到高依序拍賣，
+   保底一件金色。回合制競標——不是即時倒數，雙方輪流「加價」或「放棄」，
+   這樣完全不用處理「兩人同時出價」這種需要一個公正裁判才能判定的情況，
+   P2P 對等連線沒有這種裁判角色。
+   加價門檻跟著品質走：白 10、綠 20、藍 30、紫 40、金 50。 */
+
+const SHOP_INTERVAL = 3;
+const SHOP_MIN_RAISE = q => (q + 1) * 10;
+
+// 商店賣的技能不分邊——只要兩隊當中有人的職業學得會就算數，
+// 賣家不知道最後花落誰家，這樣才是真的在「拍賣」而不是各自的掉落池
+function rollShopSkill(q) {
+  const cls = [...new Set([...(G.picks[0] || []), ...(G.picks[1] || [])])];
+  const pool = SK_IDS.filter(id => SK[id].q === q && cls.some(c => skCanUse(c, id)));
+  if (!pool.length) return null;
+  return pool[Math.floor(grng() * pool.length)];
+}
+
+function rollShopItem(q) {
+  if (grng() < 0.5) {
+    const id = rollShopSkill(q);
+    if (id) return { kind: 'skill', q, id };
+  }
+  return { kind: 'gear', q, it: rollItem(q) };
+}
+
+function genShopItems() {
+  const items = [];
+  for (let i = 0; i < 4; i++) items.push(rollShopItem(rollQ(Q_TABLE[3])));
+  items.push(rollShopItem(4));                 // 保底一件金色
+  items.sort((a, b) => a.q - b.q);              // 由低到高依序拍賣
+  return items;
+}
+
+const shopItemName = it => it.kind === 'skill' ? SK[it.id].n : itemName(it.it);
+const shopItemDesc = it => it.kind === 'skill' ? SK[it.id].d : itemStats(it.it);
+const shopItemType = it => it.kind === 'skill' ? (skIsPassive(it.id) ? '被動技能' : '主動技能') : SLOT_N[it.it.slot];
+
+async function enterShop() {
+  const items = genShopItems();
+  G.shop = { items, idx: 0, bid: 0, bidder: -1, turn: 0, passStreak: 0 };
+  log('<b class="up">── 商店開張：5 件商品依序拍賣 ──</b>');
+  toast('商店開張！雙方輪流出價');
+  refreshTop();
+  openShop();
+  aiShopMaybeBid();
+}
+
+function startShopAuction() {
+  const s = G.shop;
+  s.bid = 0; s.bidder = -1; s.passStreak = 0;
+  s.turn = s.idx % 2;
+  refreshShopUI();
+  aiShopMaybeBid();
+}
+
+// 把商品交給得標的一方——技能給指定那一本，不能重骰；裝備照掉落規則
+// 過一次自動分解門檻（可能直接變精球，效果跟怪物掉落一致）
+function awardShopItem(side, item) {
+  if (item.kind === 'skill') {
+    const b = giveBookId(side, item.id);
+    log(`<b class="s${side}">${SIDE_N[side]}</b> 標下技能書 <b class="q${item.q}">${SK[item.id].n}</b>`);
+    return b;
+  }
+  const kept = takeItem(side, item.it);
+  log(`<b class="s${side}">${SIDE_N[side]}</b> 標下 <span class="r${item.q}">${itemName(item.it)}</span> ${itemStats(item.it)}` +
+    (kept ? '' : '（自動分解）'));
+  markNews(side);
+}
+
+function finishAuction(winner) {
+  const s = G.shop;
+  const item = s.items[s.idx];
+  if (winner >= 0) {
+    G.gold[winner] -= s.bid;
+    awardShopItem(winner, item);
+    toast(`<b class="s${winner}">${SIDE_N[winner]}</b> 以 <b>${s.bid}</b> 金幣標下「${shopItemName(item)}」！`);
+  } else {
+    log(`「${shopItemName(item)}」沒人出價，流標。`);
+  }
+  s.idx++;
+  refreshRoster(); refreshBadge();
+  if (s.idx >= s.items.length) { exitShop(); return; }
+  startShopAuction();
+}
+
+function doShopBid(amount) {
+  const side = mode === 'online' ? myTeam : G.shop.turn;
+  if (!G.shop || G.shop.turn !== side) { toast('現在不是你出價'); return; }
+  const item = G.shop.items[G.shop.idx];
+  const min = G.shop.bid + SHOP_MIN_RAISE(item.q);
+  amount = amount || min;
+  // 之前這裡會把出不起的金額硬夾回 min，等於偷偷送出一個超過自己金幣的出價——
+  // applyShopBid() 會擋下來，但玩家什麼提示都看不到，回合就卡住不會往下走。
+  if (amount < min) { toast('至少要加價到 ' + min); return; }
+  if (amount > G.gold[side]) { toast('金幣不夠，你只有 ' + G.gold[side]); return; }
+  const a = { kind: 'shopbid', side, amount };
+  if (mode === 'online') netSend({ t: 'act', a });
+  applyShopBid(a);
+}
+function applyShopBid(a) {
+  const s = G.shop;
+  if (!s || s.turn !== a.side) return;
+  const item = s.items[s.idx];
+  const min = s.bid + SHOP_MIN_RAISE(item.q);
+  if (a.amount < min || a.amount > G.gold[a.side]) return;
+  s.bid = a.amount; s.bidder = a.side; s.turn = 1 - a.side; s.passStreak = 0;
+  log(`<span class="s${a.side}">${SIDE_N[a.side]}</span> 出價 <b>${a.amount}</b> 金幣競標「${shopItemName(item)}」`);
+  refreshShopUI();
+  aiShopMaybeBid();
+}
+
+function doShopPass() {
+  const side = mode === 'online' ? myTeam : G.shop.turn;
+  if (!G.shop || G.shop.turn !== side) { toast('現在不是你決定'); return; }
+  const a = { kind: 'shoppass', side };
+  if (mode === 'online') netSend({ t: 'act', a });
+  applyShopPass(a);
+}
+function applyShopPass(a) {
+  const s = G.shop;
+  if (!s || s.turn !== a.side) return;
+  if (s.bidder >= 0) { finishAuction(s.bidder); return; }
+  if (s.passStreak) { finishAuction(-1); return; }
+  s.passStreak = 1;
+  s.turn = 1 - a.side;
+  refreshShopUI();
+  aiShopMaybeBid();
+}
+
+async function exitShop() {
+  log('<b class="up">── 商店結束 ──</b>');
+  G.shop = null;
+  closeShop();
+  refreshTop(); refreshRoster();
+  await monsterPhase();
+  if (G.over) return;
+  G.turn++;
+  await startTurn(0);
+}
+
+/* ── 商店面板 ── */
+
+function openShop() {
+  $('shopOv').classList.remove('hide');
+  refreshShopUI();
+}
+function closeShop() {
+  $('shopOv').classList.add('hide');
+}
+
+function refreshShopUI() {
+  if (!G.shop) { $('shopOv').classList.add('hide'); return; }
+  const s = G.shop;
+  $('shopList').innerHTML = s.items.map((it, i) => {
+    const cls = 'shItem q' + it.q + (i === s.idx ? ' cur' : i < s.idx ? ' done' : '');
+    return `<div class="${cls}"><b>${shopItemName(it)}</b><em>${QN[it.q]}・${shopItemType(it)}</em></div>`;
+  }).join('');
+
+  const item = s.items[s.idx];
+  const mySide = mode === 'online' ? myTeam : s.turn;
+  const myGo = mode === 'online' ? s.turn === myTeam : true;
+  const min = s.bid + SHOP_MIN_RAISE(item.q);
+
+  $('shopCur').innerHTML = `<h5 class="q${item.q}">${shopItemName(item)}<em>${QN[item.q]}・${shopItemType(item)}</em></h5>
+    <p>${shopItemDesc(item)}</p>
+    <div class="sr">目前出價　<b>${s.bidder >= 0 ? s.bid + ' 金幣（' + SIDE_N[s.bidder] + '）' : '尚無人出價'}</b></div>
+    <div class="sr">最低加價　<b>${SHOP_MIN_RAISE(item.q)}</b>　　你的金幣　<b>${G.gold[mySide]}</b></div>`;
+
+  $('shopWhoseTurn').innerHTML = `輪到 <b class="s${s.turn}">${SIDE_N[s.turn]}</b>` +
+    (mode === 'online' ? (myGo ? '（你）' : '（對手，請稍候）') : '');
+  const amt = $('shopBidAmt');
+  amt.min = min; amt.max = Math.max(min, G.gold[mySide]); amt.value = Math.min(min, G.gold[mySide]) || min;
+  $('shopBidBtn').disabled = !myGo || G.gold[mySide] < min;
+  $('shopPassBtn').disabled = !myGo;
+}
+
+// 電腦對手的簡單出價策略：本機單人模式才會用到。錢夠、品質不差就跟一手，
+// 不然就放棄——不試圖抓什麼「值不值得」的精算，純粹讓商店回合能自己跑完
+function aiShopMaybeBid() {
+  if (!(aiOn && mode === 'local')) return;
+  const s = G.shop;
+  if (!s || s.turn !== AI_SIDE) return;
+  setTimeout(() => {
+    if (!G.shop || G.shop.turn !== AI_SIDE) return;
+    const item = s.items[s.idx];
+    const min = s.bid + SHOP_MIN_RAISE(item.q);
+    const afford = G.gold[AI_SIDE] >= min + SHOP_MIN_RAISE(item.q) * 2;   // 留點餘裕，別把錢花光
+    if (afford && grng() < 0.6) doShopBid(min); else doShopPass();
+  }, 500);
+}
+
+/* ───── bagphase.js ───── */
+/* ══════════════ 背包回合（只在線上對戰生效）══════════════
+   本機對戰維持原本「每個欄位一回合只能換一次」的規則。
+   線上對戰改成：每個人的回合結束後，插入一段 60 秒的背包回合，雙方都可以
+   在這段時間自由裝備／卸下／換技能，過了這段時間就鎖住，直到下一個背包回合。
+   不需要完全同步到毫秒等級——雙方各自在本地跑一樣的倒數，跳過或逾時都是
+   各自獨立判斷要不要繼續，等同於怪物階段那種「兩邊各跑一次同一套邏輯」。 */
+
+const BAG_PHASE_MS = 60000;
+let bagPhaseTimer = null;
+
+function enterBagPhase(next) {
+  G.bagPhase = { skipped: [false, false], next, endAt: Date.now() + BAG_PHASE_MS };
+  log('<b class="up">── 背包回合：雙方都可以自由裝備、換技能 ──</b>');
+  toast('背包回合開始，60 秒內可以自由裝備');
+  refreshTop();
+  refreshBagPhaseBar();
+  if (bagPhaseTimer) clearInterval(bagPhaseTimer);
+  bagPhaseTimer = setInterval(tickBagPhase, 250);
+}
+
+function tickBagPhase() {
+  if (!G.bagPhase) { clearInterval(bagPhaseTimer); bagPhaseTimer = null; return; }
+  if (Date.now() >= G.bagPhase.endAt) { finishBagPhase(); return; }
+  refreshBagPhaseBar();
+}
+
+function doBagSkip() {
+  if (!G.bagPhase || G.bagPhase.skipped[myTeam]) return;
+  netSend({ t: 'bagskip', side: myTeam });
+  applyBagSkip(myTeam);
+}
+function applyBagSkip(side) {
+  if (!G.bagPhase || G.bagPhase.skipped[side]) return;
+  G.bagPhase.skipped[side] = true;
+  toast(`<b class="s${side}">${SIDE_N[side]}</b> 跳過了背包回合`);
+  refreshBagPhaseBar();
+  if (G.bagPhase.skipped[0] && G.bagPhase.skipped[1]) finishBagPhase();
+}
+function finishBagPhase() {
+  if (!G.bagPhase) return;
+  clearInterval(bagPhaseTimer); bagPhaseTimer = null;
+  const next = G.bagPhase.next;
+  G.bagPhase = null;
+  refreshBagPhaseBar();
+  refreshTop();
+  next();
+}
+
+function refreshBagPhaseBar() {
+  const bar = $('bagPhaseBar');
+  if (!G.bagPhase) { bar.classList.add('hide'); return; }
+  bar.classList.remove('hide');
+  const left = Math.max(0, Math.ceil((G.bagPhase.endAt - Date.now()) / 1000));
+  $('bagPhaseClock').textContent = Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0');
+  const stat = s => `<span class="s${s}${G.bagPhase.skipped[s] ? '' : ' dim'}">` +
+    SIDE_N[s] + (G.bagPhase.skipped[s] ? ' 已跳過' : ' 整理中…') + '</span>';
+  $('bagPhaseStatus').innerHTML = stat(0) + stat(1);
+  $('bagPhaseSkip').disabled = G.bagPhase.skipped[myTeam];
+}
+
 /* ───── inv.js ───── */
 /* ══════════════ 技能書、精球、掉落 ══════════════ */
 
@@ -8172,6 +8503,11 @@ function rollSkill(side, q) {
 function giveBook(side, q) {
   const id = rollSkill(side, q);
   if (!id) return null;
+  return giveBookId(side, id);
+}
+// 給一本指定的技能書——商店拍賣要先讓雙方都看到「賣的是哪一本」，
+// 得標之後給的必須是同一本，不能像 giveBook() 那樣重骰
+function giveBookId(side, id) {
   const b = { bid: ++bookSeq, id };
   G.books[side].push(b);
   return b;
@@ -8538,6 +8874,8 @@ function drawSkillRange() {
 
 // 這一回合輪到誰：線上模式講「你 / 對手」，本機模式講藍軍紅軍
 function turnLabel() {
+  if (G.shop) return '商店回合';
+  if (G.bagPhase) return '背包回合';
   if (G.cur === 2) return '魔物回合';
   if (mode === 'online') return G.cur === myTeam ? '你的回合' : '對手回合';
   return SIDE_N[G.cur] + '回合';
@@ -8857,15 +9195,24 @@ let dragOff = null;      // 正在從角色身上拖下來的裝備 {uid, slot}
 
 const bagSide = () => (mode === 'online' ? myTeam : playerSide());
 
-// 線上模式自己的隊伍隨時都能整理；本機模式輪到誰才整理誰
-const canManage = () => (mode === 'online' ? !G.over : canAct());
+// 線上模式：只有背包回合才能真的裝卸，其他時候只能看（可以隨時打開背包）。
+// 本機模式：維持原本「輪到誰才整理誰」的規則。
+const canManage = () => (mode === 'online' ? (!G.over && !!G.bagPhase) : canAct());
 
-// 每個「欄位」一回合只能換一次
+// 線上模式下 canManage() 是 false 有兩種原因（比賽結束／不在背包回合），
+// 這裡統一給對的訊息，管理背包的地方都共用這一句
+const manageMsg = () => mode === 'online'
+  ? (G.over ? '這局已經結束了' : '要等背包回合才能整理，隨時可以先打開背包看')
+  : '現在不是你的回合';
+
+// 本機模式才有「每個欄位一回合只能換一次」的限制——線上模式的限制換成
+// 背包回合本身（一整段時間內想換幾次都行，時間到就整批鎖住）
 function canSwap(u, kind, slot, quiet) {
   if (!canManage()) {
-    if (!quiet) toast(mode === 'online' ? '這局已經結束了' : '現在不是你的回合');
+    if (!quiet) toast(manageMsg());
     return false;
   }
+  if (mode === 'online') return true;
   const used = kind === 'eq' ? u.swapEq[slot] : u.swapSk[slot];
   if (used) {
     if (!quiet) toast(nameOf(u) + ' 的' + slotName(kind, slot) + '這回合已經換過了');
@@ -9314,7 +9661,7 @@ function autoGear(u, quiet) {
 }
 
 function autoGearAll() {
-  if (!canManage()) { toast('現在不是你的回合'); return; }
+  if (!canManage()) { toast(manageMsg()); return; }
   const side = bagSide();
   let n = 0;
   for (const u of G.units) if (u.side === side && isHero(u)) n += autoGear(u, 1);
@@ -9351,7 +9698,7 @@ function applyEquip(a) {
 // 卸下不算一次換裝：把那一格的次數還回去，這回合還能重新裝一件
 function doUnequip(u, slot) {
   if (!u.equip[slot]) return;
-  if (!canManage()) { toast(mode === 'online' ? '這局已經結束了' : '現在不是你的回合'); return; }
+  if (!canManage()) { toast(manageMsg()); return; }
   const a = { kind: 'unequip', uid: u.id, slot };
   sendAct(a); applyUnequip(a);
 }
@@ -9370,7 +9717,7 @@ function doSetSkill(u, slot, bid, quiet) {
   if (!u || !isHero(u)) return false;
   // 卸下（bid = 0）不算一次
   if (bid) { if (!canSwap(u, 'sk', slot, quiet)) return false; }
-  else if (!canManage()) { if (!quiet) toast('現在不是你的回合'); return false; }
+  else if (!canManage()) { if (!quiet) toast(manageMsg()); return false; }
   const a = { kind: 'skset', uid: u.id, slot, bid: bid || 0 };
   sendAct(a); applySetSkill(a);
   return true;
@@ -9399,7 +9746,7 @@ function applySetSkill(a) {
 
 function doSpend(u, k) {
   if (u.pts <= 0) return;
-  if (!canManage()) { toast('現在不是你的回合'); return; }
+  if (!canManage()) { toast(manageMsg()); return; }
   const a = { kind: 'spend', uid: u.id, k };
   sendAct(a); applySpend(a);
 }
@@ -9414,35 +9761,35 @@ function applySpend(a) {
 }
 
 function doDismantle(side, bid) {
-  if (!canManage()) { toast('現在不是你的回合'); return; }
+  if (!canManage()) { toast(manageMsg()); return; }
   const a = { kind: 'skdis', side, bid };
   sendAct(a); applyDismantle(a);
 }
 function applyDismantle(a) { dismantle(a.side, a.bid); afterBagChange(null); }
 
 function doCraft(side, q) {
-  if (!canManage()) { toast('現在不是你的回合'); return; }
+  if (!canManage()) { toast(manageMsg()); return; }
   const a = { kind: 'skcraft', side, q };
   sendAct(a); applyCraft(a);
 }
 function applyCraft(a) { craft(a.side, a.q); afterBagChange(null); }
 
 function doScrap(side, iid) {
-  if (!canManage()) { toast('現在不是你的回合'); return; }
+  if (!canManage()) { toast(manageMsg()); return; }
   const a = { kind: 'gdis', side, iid };
   sendAct(a); applyScrap(a);
 }
 function applyScrap(a) { scrapItem(a.side, a.iid); afterBagChange(null); }
 
 function doScrapAll(side, maxR) {
-  if (!canManage()) { toast('現在不是你的回合'); return; }
+  if (!canManage()) { toast(manageMsg()); return; }
   const a = { kind: 'gdisall', side, maxR };
   sendAct(a); applyScrapAll(a);
 }
 function applyScrapAll(a) { scrapAll(a.side, a.maxR); afterBagChange(null); }
 
 function doCraftItem(side, r) {
-  if (!canManage()) { toast('現在不是你的回合'); return; }
+  if (!canManage()) { toast(manageMsg()); return; }
   const a = { kind: 'gcraft', side, r };
   sendAct(a); applyCraftItem(a);
 }
@@ -10007,11 +10354,14 @@ async function onNetData(m) {
     else if (m.a.kind === 'gdis') applyScrap(m.a);
     else if (m.a.kind === 'gdisall') applyScrapAll(m.a);
     else if (m.a.kind === 'gcraft') applyCraftItem(m.a);
+    else if (m.a.kind === 'shopbid') applyShopBid(m.a);
+    else if (m.a.kind === 'shoppass') applyShopPass(m.a);
     else await runAction(m.a);
   } else if (m.t === 'end') await doEndTurn(false);
   else if (m.t === 'again') { toast('對手開了新的一局'); ready = Promise.resolve(newGame(m.seed, G.picks)); }
   else if (m.t === 'sync') { enterGame(); await applySync(m.s); }
   else if (m.t === 'pick') onGuestPick(m.cls);
+  else if (m.t === 'bagskip') applyBagSkip(m.side);
 }
 
 // 收拾目前的連線嘗試 —— 換頁面、按返回、或重新按一次建立/加入之前都要先呼叫，
@@ -10323,8 +10673,13 @@ async function boot() {
   bindBagTabs();
   $('bagAuto').onclick = autoGearAll;
   $('bagClose').onclick = closeBag;
+  $('shopBidBtn').onclick = () => doShopBid(+$('shopBidAmt').value);
+  $('shopPassBtn').onclick = doShopPass;
+  $('bagPhaseSkip').onclick = doBagSkip;
   $('btnQuit').onclick = () => {
     if (net.peer) { net.peer.destroy(); net.peer = null; }
+    if (bagPhaseTimer) { clearInterval(bagPhaseTimer); bagPhaseTimer = null; }
+    G.bagPhase = null; G.shop = null;
     mode = 'local';
     $('hud').classList.add('hide');
     $('netTag').classList.add('hide');
@@ -10332,6 +10687,8 @@ async function boot() {
     $('mNet').classList.add('hide'); $('mWait').classList.add('hide');
     $('mMain').classList.remove('hide');
     $('result').classList.add('hide');
+    $('bagPhaseBar').classList.add('hide');
+    $('shopOv').classList.add('hide');
     closeBag();
   };
   $('btnUndo').onclick = () => {

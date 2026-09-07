@@ -241,6 +241,8 @@ function drawSkillRange() {
 
 // 這一回合輪到誰：線上模式講「你 / 對手」，本機模式講藍軍紅軍
 function turnLabel() {
+  if (G.shop) return '商店回合';
+  if (G.bagPhase) return '背包回合';
   if (G.cur === 2) return '魔物回合';
   if (mode === 'online') return G.cur === myTeam ? '你的回合' : '對手回合';
   return SIDE_N[G.cur] + '回合';
@@ -560,15 +562,24 @@ let dragOff = null;      // 正在從角色身上拖下來的裝備 {uid, slot}
 
 const bagSide = () => (mode === 'online' ? myTeam : playerSide());
 
-// 線上模式自己的隊伍隨時都能整理；本機模式輪到誰才整理誰
-const canManage = () => (mode === 'online' ? !G.over : canAct());
+// 線上模式：只有背包回合才能真的裝卸，其他時候只能看（可以隨時打開背包）。
+// 本機模式：維持原本「輪到誰才整理誰」的規則。
+const canManage = () => (mode === 'online' ? (!G.over && !!G.bagPhase) : canAct());
 
-// 每個「欄位」一回合只能換一次
+// 線上模式下 canManage() 是 false 有兩種原因（比賽結束／不在背包回合），
+// 這裡統一給對的訊息，管理背包的地方都共用這一句
+const manageMsg = () => mode === 'online'
+  ? (G.over ? '這局已經結束了' : '要等背包回合才能整理，隨時可以先打開背包看')
+  : '現在不是你的回合';
+
+// 本機模式才有「每個欄位一回合只能換一次」的限制——線上模式的限制換成
+// 背包回合本身（一整段時間內想換幾次都行，時間到就整批鎖住）
 function canSwap(u, kind, slot, quiet) {
   if (!canManage()) {
-    if (!quiet) toast(mode === 'online' ? '這局已經結束了' : '現在不是你的回合');
+    if (!quiet) toast(manageMsg());
     return false;
   }
+  if (mode === 'online') return true;
   const used = kind === 'eq' ? u.swapEq[slot] : u.swapSk[slot];
   if (used) {
     if (!quiet) toast(nameOf(u) + ' 的' + slotName(kind, slot) + '這回合已經換過了');
@@ -1017,7 +1028,7 @@ function autoGear(u, quiet) {
 }
 
 function autoGearAll() {
-  if (!canManage()) { toast('現在不是你的回合'); return; }
+  if (!canManage()) { toast(manageMsg()); return; }
   const side = bagSide();
   let n = 0;
   for (const u of G.units) if (u.side === side && isHero(u)) n += autoGear(u, 1);
@@ -1054,7 +1065,7 @@ function applyEquip(a) {
 // 卸下不算一次換裝：把那一格的次數還回去，這回合還能重新裝一件
 function doUnequip(u, slot) {
   if (!u.equip[slot]) return;
-  if (!canManage()) { toast(mode === 'online' ? '這局已經結束了' : '現在不是你的回合'); return; }
+  if (!canManage()) { toast(manageMsg()); return; }
   const a = { kind: 'unequip', uid: u.id, slot };
   sendAct(a); applyUnequip(a);
 }
@@ -1073,7 +1084,7 @@ function doSetSkill(u, slot, bid, quiet) {
   if (!u || !isHero(u)) return false;
   // 卸下（bid = 0）不算一次
   if (bid) { if (!canSwap(u, 'sk', slot, quiet)) return false; }
-  else if (!canManage()) { if (!quiet) toast('現在不是你的回合'); return false; }
+  else if (!canManage()) { if (!quiet) toast(manageMsg()); return false; }
   const a = { kind: 'skset', uid: u.id, slot, bid: bid || 0 };
   sendAct(a); applySetSkill(a);
   return true;
@@ -1102,7 +1113,7 @@ function applySetSkill(a) {
 
 function doSpend(u, k) {
   if (u.pts <= 0) return;
-  if (!canManage()) { toast('現在不是你的回合'); return; }
+  if (!canManage()) { toast(manageMsg()); return; }
   const a = { kind: 'spend', uid: u.id, k };
   sendAct(a); applySpend(a);
 }
@@ -1117,35 +1128,35 @@ function applySpend(a) {
 }
 
 function doDismantle(side, bid) {
-  if (!canManage()) { toast('現在不是你的回合'); return; }
+  if (!canManage()) { toast(manageMsg()); return; }
   const a = { kind: 'skdis', side, bid };
   sendAct(a); applyDismantle(a);
 }
 function applyDismantle(a) { dismantle(a.side, a.bid); afterBagChange(null); }
 
 function doCraft(side, q) {
-  if (!canManage()) { toast('現在不是你的回合'); return; }
+  if (!canManage()) { toast(manageMsg()); return; }
   const a = { kind: 'skcraft', side, q };
   sendAct(a); applyCraft(a);
 }
 function applyCraft(a) { craft(a.side, a.q); afterBagChange(null); }
 
 function doScrap(side, iid) {
-  if (!canManage()) { toast('現在不是你的回合'); return; }
+  if (!canManage()) { toast(manageMsg()); return; }
   const a = { kind: 'gdis', side, iid };
   sendAct(a); applyScrap(a);
 }
 function applyScrap(a) { scrapItem(a.side, a.iid); afterBagChange(null); }
 
 function doScrapAll(side, maxR) {
-  if (!canManage()) { toast('現在不是你的回合'); return; }
+  if (!canManage()) { toast(manageMsg()); return; }
   const a = { kind: 'gdisall', side, maxR };
   sendAct(a); applyScrapAll(a);
 }
 function applyScrapAll(a) { scrapAll(a.side, a.maxR); afterBagChange(null); }
 
 function doCraftItem(side, r) {
-  if (!canManage()) { toast('現在不是你的回合'); return; }
+  if (!canManage()) { toast(manageMsg()); return; }
   const a = { kind: 'gcraft', side, r };
   sendAct(a); applyCraftItem(a);
 }

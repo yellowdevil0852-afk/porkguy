@@ -33,6 +33,11 @@ function rollSkill(side, q) {
 function giveBook(side, q) {
   const id = rollSkill(side, q);
   if (!id) return null;
+  return giveBookId(side, id);
+}
+// 給一本指定的技能書——商店拍賣要先讓雙方都看到「賣的是哪一本」，
+// 得標之後給的必須是同一本，不能像 giveBook() 那樣重骰
+function giveBookId(side, id) {
   const b = { bid: ++bookSeq, id };
   G.books[side].push(b);
   return b;

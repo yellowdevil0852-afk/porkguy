@@ -87,11 +87,14 @@ async function onNetData(m) {
     else if (m.a.kind === 'gdis') applyScrap(m.a);
     else if (m.a.kind === 'gdisall') applyScrapAll(m.a);
     else if (m.a.kind === 'gcraft') applyCraftItem(m.a);
+    else if (m.a.kind === 'shopbid') applyShopBid(m.a);
+    else if (m.a.kind === 'shoppass') applyShopPass(m.a);
     else await runAction(m.a);
   } else if (m.t === 'end') await doEndTurn(false);
   else if (m.t === 'again') { toast('對手開了新的一局'); ready = Promise.resolve(newGame(m.seed, G.picks)); }
   else if (m.t === 'sync') { enterGame(); await applySync(m.s); }
   else if (m.t === 'pick') onGuestPick(m.cls);
+  else if (m.t === 'bagskip') applyBagSkip(m.side);
 }
 
 // 收拾目前的連線嘗試 —— 換頁面、按返回、或重新按一次建立/加入之前都要先呼叫，

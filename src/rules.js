@@ -1224,12 +1224,21 @@ async function doEndTurn(broadcast) {
   sel = null; phase = 'idle'; preMove = null;
   clearOverlay(); hideCard(); hideForecast(); closeSkillBar();
   if (G.arena) { await arenaEndTurn(); return; }
-  if (G.cur === 0) { await startTurn(1); return; }
-  if (G.turn % ARENA_INTERVAL === 0) { await enterArena(); return; }
-  await monsterPhase();
-  if (G.over) return;
-  G.turn++;
-  await startTurn(0);
+
+  // 接下來原本該發生的事——包成一個延續函式，因為線上模式要先插一段
+  // 背包回合，等背包回合自己結束（逾時或雙方都跳過）才會繼續往下走
+  const proceed = async () => {
+    if (G.cur === 0) { await startTurn(1); return; }
+    if (G.turn % ARENA_INTERVAL === 0) { await enterArena(); return; }
+    if (G.turn % SHOP_INTERVAL === 0) { await enterShop(); return; }
+    await monsterPhase();
+    if (G.over) return;
+    G.turn++;
+    await startTurn(0);
+  };
+
+  if (mode === 'online') { enterBagPhase(proceed); return; }
+  await proceed();
 }
 
 /* ── 怪物 ── */
@@ -1339,6 +1348,8 @@ function newGame(seed, picks) {
   G.gorbs = [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0]];       // 裝備精球
   G.gold = [0, 0];                                    // 金幣
   G.arena = null;                                     // 不在競技場時是 null
+  G.shop = null;                                      // 不在商店時是 null
+  G.bagPhase = null;                                  // 不在背包回合時是 null
   G.news = [0, 0];                                    // 有沒有沒看過的新掉落
   G.picks = picks || [CLS_ORDER.slice(0, TEAM_SIZE), CLS_ORDER.slice(0, TEAM_SIZE)];
   PENDING = []; AURAS = []; bookSeq = 0;

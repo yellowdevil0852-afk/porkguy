@@ -453,3 +453,34 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
 /* 上面面板的「輪到誰」 */
 #turnWho em{font-style:normal;font-size:10.5px;color:var(--dim);margin-left:5px}
 #turnWho.mine{color:var(--gold);font-weight:700}
+
+/* ══════════ 商店 ══════════ */
+#shopList{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:12px 0}
+.shItem{flex:0 0 100px;padding:7px 6px;border-radius:9px;background:#131a26;
+  border:1px solid var(--line);text-align:center;opacity:.55;transition:.15s}
+.shItem b{display:block;font-size:11.5px;font-weight:700;margin-bottom:2px}
+.shItem em{display:block;font-size:9px;color:var(--dim);font-style:normal}
+.shItem.cur{opacity:1;border-color:var(--gold);box-shadow:0 0 0 2px var(--gold);transform:translateY(-3px)}
+.shItem.done{opacity:.3}
+.shItem.q0 b{color:#c9d2e0} .shItem.q1 b{color:#5fd39a} .shItem.q2 b{color:#5aa2ff}
+.shItem.q3 b{color:#c07dff} .shItem.q4 b{color:#e8c168}
+#shopCur{background:#131a26;border:1px solid var(--line);border-radius:10px;
+  padding:12px 16px;text-align:left;margin-bottom:12px}
+#shopCur h5{display:flex;justify-content:space-between;align-items:baseline;font-size:15px}
+#shopCur h5 em{font-size:11px;color:var(--dim);font-style:normal;font-weight:400}
+#shopCur p{color:var(--dim);margin:5px 0 8px;font-size:12px}
+#shopCur .sr{display:flex;gap:6px;font-size:12px;padding:2px 0}
+#shopCur .sr b{color:var(--txt);font-weight:700}
+#shopBidRow{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
+#shopWhoseTurn{font-size:12.5px;color:var(--dim);margin-right:4px}
+#shopBidAmt{width:80px;padding:6px 8px;border-radius:7px;border:1px solid var(--line);
+  background:#0e141f;color:var(--txt);font:inherit;text-align:center}
+
+/* 背包回合的倒數列，固定在上面面板下方 */
+#bagPhaseBar{position:fixed;top:50px;left:50%;transform:translateX(-50%);z-index:20;
+  display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--gold);
+  border-radius:9px;padding:6px 14px;font-size:12.5px;zoom:var(--uiscale)}
+#bagPhaseClock{font-weight:800;color:var(--gold);font-size:14px;min-width:38px;text-align:center}
+#bagPhaseStatus span{margin-right:8px}
+#bagPhaseStatus .dim{color:var(--dim)}
+#bagPhaseSkip{font-size:11px;padding:4px 10px}
