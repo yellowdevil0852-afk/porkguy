@@ -11,14 +11,17 @@ const LEASH = 8;                         // 怪物離營地最遠追多少格
 const REVIVE_TURNS = 3;                  // 英雄倒下後幾回合在營地復活
 const REVIVE_DASH = 2;                   // 復活後兩回合的額外移動力
 const CAMP_HEAL = 0.25;                  // 站在營地周圍一格，每回合回復最大生命的幾成
-// 怪群等級（依營地離王座的遠近）。英雄封頂 Lv10，這裡拉高到 7，
-// 不然王座圈的怪到了後期只是站著的經驗值，打不痛也死不了人。
-const MON_LV = { 1: 1, 2: 4, 3: 7 };
+// 怪群等級（依營地離王座的遠近）。英雄封頂 Lv10，第 4 級是貼著王座本體的
+// 最終守衛，滿級站崗——只有夠大的地圖（48×48 以上）才擠得下這一圈，見 placeCamps()。
+const MON_LV = { 1: 1, 2: 4, 3: 7, 4: 10 };
 const MON_REVIVE_BASE = 5;               // 怪物重生的底線回合數，之後每一等 +1
+// 精英變種：跟首領共用「換色＋放大」那套做法，但是隨機出現在任何一般怪身上，
+// 不占地圖版面、不用新模型，純粹讓「這隻不太一樣」有機會發生在任何一場戰鬥裡。
+const MON_ELITE = { chance: 0.15, hp: 1.4, atk: 1.25, def: 1.15, exp: 1.8, gold: 1.6, tint: 0xd68cff };
 const NO_REVIVE_R = 5;                   // 王座半徑幾格內的怪群不復活
 const CRIT = 0.10, CRIT_MULT = 1.5;
-const FLANK = { front: 1, side: 1.25, back: 1.5 };
-const COUNTER_TRI = 1.5;                 // 攻擊類型剋護甲類型的倍率
+const FLANK = { front: 1, side: 1.25, back: 1.25 };
+const COUNTER_TRI = 1.2;                 // 攻擊類型剋護甲類型的倍率
 const HIGH_GROUND = 2;                   // 高處往低處打的加成
 // 減傷曲線常數：防禦等於這個數字時，傷害剛好減半（傷害 = 攻擊 × K/(K+防禦)）。
 // 取代舊的「攻擊 − 防禦」線性扣減 —— 那個公式在數值拉開後防禦方會變成

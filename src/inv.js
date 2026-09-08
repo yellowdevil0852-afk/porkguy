@@ -135,17 +135,18 @@ function monsterDrop(killer, m) {
   const tier = MON[m.kind].boss ? 'boss' : (m.tier || 1) * 2 - 1;
   const tbl = Q_TABLE[tier] || Q_TABLE[1];
   let got = false;
-  const gold = goldFromTier(MON[m.kind].boss ? 'boss' : (m.tier || 1));
+  const gold = Math.round(goldFromTier(MON[m.kind].boss ? 'boss' : (m.tier || 1)) * (m.elite ? MON_ELITE.gold : 1));
   giveGold(killer.side, gold);
   floatText(m.x, m.y, '+' + gold + ' 金幣', 'up');
-  if (grng() < 0.25) {
+  // 精英變種掉落機率加倍，多打的那份風險要有更值得的回報
+  if (grng() < (m.elite ? 0.5 : 0.25)) {
     const it = rollItem(rollQ(tbl));
     if (takeItem(killer.side, it)) {
       log(`　掉落 <span class="r${it.r}">${itemName(it)}</span> ${itemStats(it)}`);
       got = true;
     } else log(`　掉落 <span class="r${it.r}">${itemName(it)}</span>（自動分解）`);
   }
-  if (grng() < 0.15) {
+  if (grng() < (m.elite ? 0.3 : 0.15)) {
     const b = giveBook(killer.side, rollQ(tbl));
     if (b) { log(`　掉落技能書 <b class="q${SK[b.id].q}">${SK[b.id].n}</b>`); got = true; }
   }

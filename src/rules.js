@@ -41,7 +41,7 @@ function hasLOS(a, b) {
 const canReach = (a, b) => dmgType(a) === 'melee' || hasLOS(a, b);
 const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));   // 正方形距離
 const base = u => u.side === 2 ? MON[u.kind] : CLS[u.cls];
-const nameOf = u => u.side === 2 ? MON[u.kind].n
+const nameOf = u => u.side === 2 ? (u.elite ? '精英' : '') + MON[u.kind].n
   : (u.lv >= PROMO_LV ? CLS[u.cls].pro : CLS[u.cls].n);
 const isHero = u => u.side !== 2;
 const myTurn = () => mode === 'local' || G.cur === myTeam;
@@ -54,6 +54,7 @@ function statOf(u, k) {
   const d = base(u);
   let v = d[k] || 0;
   v += (u.lv - 1) * ((isHero(u) ? LV_GAIN : MON_GAIN)[k] || 0);
+  if (!isHero(u) && u.elite && MON_ELITE[k]) v = Math.round(v * MON_ELITE[k]);
   if (isHero(u)) {
     if (u.lv >= PROMO_LV) v += PROMO[k] || 0;
     for (const s in u.equip) { const it = u.equip[s]; if (it && it[k]) v += it[k]; }
@@ -270,11 +271,12 @@ function mkHero(side, cls, x, y) {
 function mkMon(kind, x, y, camp) {
   const m = MON[kind];
   const tier = camp ? camp.tier : 1;
+  const elite = !m.boss && grng() < MON_ELITE.chance;   // 首領自己就是尖兵，不用再疊精英
   const u = {
     id: uidSeq++, side: 2, kind, x, y, dir: Math.floor(grng() * 8), turned: false,
     lv: MON_LV[tier], exp: 0, moved: false, acted: false, alive: true,
     equip: {}, cds: {}, st: [], awake: false, home: [x, y],
-    camp: camp ? camp.id : -1, tier
+    camp: camp ? camp.id : -1, tier, elite
   };
   u.hp = mhpOf(u);
   G.units.push(u);
@@ -617,7 +619,7 @@ async function die(u, killer) {
     log(`<span class="kill">${nameOf(u)} 被消滅了</span>` + (u.down ? `（${u.down} 回合後重生）` : ''));
   }
   if (killer && killer.alive) {
-    gainExp(killer, u.side === 2 ? MON[u.kind].exp : XP_KILL_PC);
+    gainExp(killer, u.side === 2 ? Math.round(MON[u.kind].exp * (u.elite ? MON_ELITE.exp : 1)) : XP_KILL_PC);
     if (u.side === 2) monsterDrop(killer, u);
     killRefresh(killer);
   }
@@ -1407,7 +1409,8 @@ function newGame(seed, picks) {
   }
   // 怪物營地
   for (const c of CAMPS) {
-    const kinds = c.tier === 3 ? ['boss', 'warrior', 'mage', 'minion']
+    const kinds = c.tier === 4 ? ['boss', 'boss', 'mage', 'warrior']   // 王座最終守衛，雙首領壓陣
+      : c.tier === 3 ? ['boss', 'warrior', 'mage', 'minion']
       : c.tier === 2 ? ['warrior', 'rogue', 'mage', 'minion']
       : ['minion', 'minion', 'rogue'];
     for (const k of kinds) {

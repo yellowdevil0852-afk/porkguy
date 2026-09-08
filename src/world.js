@@ -127,6 +127,8 @@ function placeCamps() {
     { r: W * 0.44, n: big ? 10 : small ? 4 : 6, tier: 1 }
   ];
   if (W > 46) rings.push({ r: W * 0.46, n: 8, tier: 1 });
+  // 王座的最終守衛：貼著王座本體，只有夠大的地圖才擠得下、不會跟王座柱子疊在一起
+  if (W >= 48) rings.push({ r: W * 0.08, n: 4, tier: 4 });
   for (const g of rings) {
     for (let i = 0; i < g.n; i++) {
       const a = (i / g.n) * Math.PI * 2 + g.tier * 0.6;
@@ -566,10 +568,11 @@ function makePortraits() {
 function buildUnitView(u) {
   const def = u.side === 2 ? MON[u.kind] : CLS[u.cls];
   const root = THREE.SkeletonUtils.clone(MODELS[def.model].scene);
-  const scale = (def.scale || 1) * 0.75;
+  // 精英變種跟首領共用「換色＋放大」，一眼就看得出這隻不太一樣
+  const scale = (def.scale || 1) * 0.75 * (u.elite ? 1.15 : 1);
   root.scale.setScalar(scale);
 
-  const tint = new THREE.Color(def.tint || 0xffffff);
+  const tint = new THREE.Color(u.elite ? MON_ELITE.tint : (def.tint || 0xffffff));
   if (u.side === 0) tint.multiply(new THREE.Color(0xcfe0ff));
   else if (u.side === 1) tint.multiply(new THREE.Color(0xffcdbd));
 

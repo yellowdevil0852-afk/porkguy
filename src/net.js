@@ -9,13 +9,16 @@ const CODEC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const mkCode = () => Array.from({ length: 6 },
   () => CODEC[Math.floor(Math.random() * CODEC.length)]).join('');
 
-// PeerJS 預設只給 STUN，兩邊都在對稱式 NAT（常見於行動網路、部分公司／家用防火牆）
-// 後面時，光靠 STUN 常常連不出真正的媒體通道——signaling 看起來成功、UI 卻卡住不動，
-// 也不一定會噴 error 事件。額外加公開的免費 TURN（Open Relay Project）當中繼，
-// 連不到 P2P 直連時能繞過去，大幅提高「一邊在家、一邊用手機熱點」這種組合的成功率。
+// 兩邊都在對稱式 NAT（常見於行動網路、部分公司／家用防火牆）後面時，光靠 STUN
+// 常常連不出真正的媒體通道——signaling 看起來成功、UI 卻卡住不動，也不一定會噴
+// error 事件。PeerJS 本身內建一組 TURN（turn.peerjs.com）當備援，但傳 `config`
+// 選項是整個物件覆蓋掉、不是合併——沒把內建那組抄進來的話等於用掉了它，反而更差。
+// 這裡把 PeerJS 內建的 TURN 跟另一個公開免費 TURN（Open Relay Project）都列進去，
+// 兩組 TURN 誰能用就用誰，比只靠單一一組免費服務更耐操一點。
 const ICE_CONFIG = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
+    { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' },
     { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
     { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
     { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
@@ -122,7 +125,9 @@ function clearConnTimer() { if (connTimer) { clearTimeout(connTimer); connTimer 
 // WebRTC 的兩端協商偶爾會卡住不動、也不觸發任何 error 事件（常見於某些防火牆／
 // 對稱式 NAT），這時候畫面會停在「連線中…」動也不動、使用者完全不知道發生什麼事。
 // 用逾時把這種情況攔下來，至少給個明確的訊息和收拾乾淨的狀態，能夠重新再試一次。
-const CONN_TIMEOUT = 15000;
+// 15 秒原本是抓「完全卡死」的，但要繞去 TURN 中繼本來就比直連多花幾秒協商，
+// 拉長到 25 秒給 TURN 多一點時間，不要在它其實還在忙的時候就提前判死刑。
+const CONN_TIMEOUT = 25000;
 
 function startHost() {
   destroyPeer();
