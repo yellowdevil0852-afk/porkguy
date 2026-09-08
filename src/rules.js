@@ -1250,10 +1250,12 @@ async function doEndTurn(broadcast) {
   clearOverlay(); hideCard(); hideForecast(); closeSkillBar();
   if (G.arena) { await arenaEndTurn(); return; }
 
-  // 接下來原本該發生的事——包成一個延續函式，因為線上模式要先插一段
-  // 背包回合，等背包回合自己結束（逾時或雙方都跳過）才會繼續往下走
+  // 藍方剛結束只是換紅方繼續這一輪，還沒到「所有玩家都行動完」，不夾背包回合
+  if (G.cur === 0) { await startTurn(1); return; }
+
+  // 走到這裡代表雙方這一輪都結束了——背包回合夾在「所有玩家回合」跟「魔物／
+  // 競技場／商店」之間，只在這裡插一次，不是每個人結束回合都插
   const proceed = async () => {
-    if (G.cur === 0) { await startTurn(1); return; }
     if (G.turn % ARENA_INTERVAL === 0) { await enterArena(); return; }
     if (G.turn % SHOP_INTERVAL === 0) { await enterShop(); return; }
     await monsterPhase();
