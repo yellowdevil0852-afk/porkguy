@@ -116,6 +116,9 @@ async function enterArena() {
   }
   // 沒被傳送過去的（怪物、沒參賽的英雄）整批凍結，見 alive()/unitAt() 的註解
   for (const u of G.units) u.paused = !participants.includes(u.id);
+  // 主戰場上還在倒數復活的（凍結中）不該把倒數圈畫進小小的競技場裡——
+  // 不然畫面上會飄著幾個跟這場戰鬥完全無關、座標還是主地圖那套算出來的圈圈
+  refreshRespawn();
 
   G.arena = { saved, participants };
   refreshArenaBuffTiles();

@@ -431,6 +431,7 @@ async function animMove(u, path) {
       u.x = path[i][0]; u.y = path[i][1];
       if (tr) { TRAPS.splice(TRAPS.indexOf(tr), 1); refreshTraps(); await hurt(u, tr.dmg, '陷阱'); break; }
     }
+    if (!u.alive) return;   // 陷阱傷害直接打死的話 die() 已經把 u.view 拆了，下面會對 null 取 .g 整個爆炸
     placeUnit(u);
     await openChest(u);
     return;
@@ -456,7 +457,8 @@ async function animMove(u, path) {
       TRAPS.splice(TRAPS.indexOf(tr), 1);
       refreshTraps();
       await hurt(u, tr.dmg, '陷阱');
-      if (tr.st && u.alive) for (const e of tr.st) addSt(u, u, e);
+      if (!u.alive) return;   // 同上：陷阱傷害打死人的話 u.view 已經被 die() 拆掉了
+      for (const e of tr.st || []) addSt(u, u, e);
       break;
     }
   }
@@ -694,7 +696,9 @@ async function runAction(a) {
     u.acted = true;
   } else if (a.kind === 'skill') {
     await useSkill(u, a.skill, a);
-    u.acted = true;
+    // 一騎當千這類「本回合殺人就恢復行動」的技能，本來就是要接著攻擊用的——
+    // 放技能本身不能算用掉這回合的行動，不然「這回合殺人才有用」永遠碰不到
+    if (!SK[a.skill].killRefresh) u.acted = true;
   } else if (a.kind === 'wait') {
     u.moved = true; u.acted = true;
   }

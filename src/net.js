@@ -9,6 +9,19 @@ const CODEC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const mkCode = () => Array.from({ length: 6 },
   () => CODEC[Math.floor(Math.random() * CODEC.length)]).join('');
 
+// PeerJS 預設只給 STUN，兩邊都在對稱式 NAT（常見於行動網路、部分公司／家用防火牆）
+// 後面時，光靠 STUN 常常連不出真正的媒體通道——signaling 看起來成功、UI 卻卡住不動，
+// 也不一定會噴 error 事件。額外加公開的免費 TURN（Open Relay Project）當中繼，
+// 連不到 P2P 直連時能繞過去，大幅提高「一邊在家、一邊用手機熱點」這種組合的成功率。
+const ICE_CONFIG = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+  ]
+};
+
 function netSend(o) { if (net.conn && net.conn.open) try { net.conn.send(o); } catch (e) {} }
 
 function hookConn(c) {
@@ -118,7 +131,7 @@ function startHost() {
   $('mWait').classList.remove('hide');
   $('roomCode').textContent = code;
   net.host = true;
-  net.peer = new Peer(PREFIX + code, { debug: 0 });
+  net.peer = new Peer(PREFIX + code, { debug: 0, config: ICE_CONFIG });
   net.peer.on('open', () => { $('mWaitNote').textContent = '房間已開啟，等待對手加入…'; });
   net.peer.on('connection', c => {
     clearConnTimer();
@@ -142,7 +155,7 @@ function startJoin() {
   destroyPeer();
   $('mNetNote').textContent = '連線中…';
   net.host = false;
-  net.peer = new Peer({ debug: 0 });
+  net.peer = new Peer({ debug: 0, config: ICE_CONFIG });
   net.peer.on('open', () => {
     const c = net.peer.connect(PREFIX + code, { reliable: true });
     hookConn(c);

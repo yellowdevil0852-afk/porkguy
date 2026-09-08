@@ -438,7 +438,7 @@ function refreshRespawn() {
   respGroup = new THREE.Group();
   fxGroup.add(respGroup);
   for (const u of G.units) {
-    if (u.alive || !u.down) continue;
+    if (u.alive || !u.down || u.paused) continue;   // 凍結中的（例如競技場開打時留在主戰場的）不畫
     const spot = respawnSpot(u);
     if (!inBoard(spot[0], spot[1])) continue;
     const m = new THREE.Mesh(
