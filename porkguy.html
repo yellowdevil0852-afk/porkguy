@@ -455,8 +455,27 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
 #turnBanner.s1 #turnBigTxt{color:#ff9a8a}
 #turnBanner.s2 #turnBigTxt{color:#b9aeff;font-size:44px;letter-spacing:6px}
 #turnBanner.shop #turnBigTxt{color:var(--gold);font-size:52px;letter-spacing:8px}
-#turnBanner.arena #turnBigTxt{color:#ff9a4a;font-size:52px;letter-spacing:8px}
 /* 拿掉「輪到你就是金色」的特例——直接用該隊自己的顏色，藍方回合就是藍色 */
+
+/* ── 進競技場的轉場：專屬一套動畫，不走 showBanner() 那套飛到角落的邏輯 ──
+   灰色背景用 radial-gradient 配一個可以動畫的 --r 變數：r 是「還蓋著灰色」的
+   半徑百分比，r 從 0（還沒蓋）長到 100+（整片蓋滿）是進場，退場反過來從
+   100 縮到 0——縮小的過程中，圓外（已經小於 r 的地方）先變回透明，
+   所以看起來是「從畫面邊緣開始退，最後才收到中間」。 */
+#arenaFx{position:fixed;inset:0;z-index:47;display:flex;align-items:center;justify-content:center;
+  pointer-events:none;zoom:var(--uiscale);opacity:0}
+#arenaFx.show{opacity:1}
+#arenaFx::before{content:'';position:absolute;inset:0;
+  background:radial-gradient(circle at center,rgba(60,62,68,.94) 0%,rgba(60,62,68,.94) var(--r,0%),
+    rgba(60,62,68,0) calc(var(--r,0%) + 18%));
+  backdrop-filter:blur(var(--blur,0px));-webkit-backdrop-filter:blur(var(--blur,0px))}
+#arenaFxTxt{position:relative;font-size:56px;font-weight:800;letter-spacing:10px;color:var(--gold);
+  text-shadow:0 4px 30px #000,0 0 70px currentColor;white-space:nowrap;
+  transform:scale(.3);opacity:0;will-change:transform,opacity}
+#arenaFxTxt.grown{animation:arenaSway 2.1s ease-in-out infinite}
+#arenaFxTxt.leaving{transition:transform 1s ease-in,opacity 1s ease-in;
+  transform:translateX(-60vw) rotate(-8deg);opacity:0}
+@keyframes arenaSway{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
 
 /* 上面面板的「輪到誰」 */
 #turnWho em{font-style:normal;font-size:10.5px;color:var(--dim);margin-left:5px}
@@ -573,6 +592,7 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
 </div>
 
 <div id="turnBanner" class="hide"><span id="turnBigTxt"></span></div>
+<div id="arenaFx" class="hide"><span id="arenaFxTxt">競技場回合</span></div>
 <div id="skillTip" class="hide"></div>
 
 <div id="menu" class="overlay">
@@ -5038,7 +5058,7 @@ const TEX = {"hexagons_medieval.png":"data:image/png;base64,iVBORw0KGgoAAAANSUhE
 
 let W = 27, H = 27;                      // 地圖邊長，開局時由選單決定
 const TILE = 2;
-const SIZES = [16, 24, 32, 48, 64];      // 可選的地圖大小
+const SIZES = [16, 32, 64, 96, 128];     // 可選的地圖大小
 let THRONE = [13, 13];                   // 正中央，setSize() 會重算
 const THRONE_WIN = 5;                    // 連續佔領幾回合獲勝
 const AGGRO = 3;                         // 怪物驚醒距離
@@ -5046,9 +5066,15 @@ const LEASH = 8;                         // 怪物離營地最遠追多少格
 const REVIVE_TURNS = 3;                  // 英雄倒下後幾回合在營地復活
 const REVIVE_DASH = 2;                   // 復活後兩回合的額外移動力
 const CAMP_HEAL = 0.25;                  // 站在營地周圍一格，每回合回復最大生命的幾成
-// 怪群等級（依營地離王座的遠近）。英雄封頂 Lv10，第 4 級是貼著王座本體的
-// 最終守衛，滿級站崗——只有夠大的地圖（48×48 以上）才擠得下這一圈，見 placeCamps()。
-const MON_LV = { 1: 1, 2: 4, 3: 7, 4: 10 };
+// 怪群等級（依營地離王座的遠近）。英雄封頂 Lv10，但怪物的最高等級跟著地圖大小走——
+// 地圖越大，遊戲拖越長，角色也該練得越高，中心的最終守衛才有意義（不是站著的經驗值）。
+// 四圈由外而內（tier1～tier4）各佔地圖最高等級的比例，比例本身是抓的，不是精算出來的。
+const MON_MAXLV_BY_SIZE = { 16: 7, 32: 10, 64: 15, 96: 22, 128: 30 };
+const MON_LV_RATIO = [0.1, 0.4, 0.7, 1.0];
+function monLvFor(tier) {
+  const maxLv = MON_MAXLV_BY_SIZE[W] || MON_MAXLV_BY_SIZE[32];
+  return Math.max(1, Math.round(maxLv * MON_LV_RATIO[tier - 1]));
+}
 const MON_REVIVE_BASE = 5;               // 怪物重生的底線回合數，之後每一等 +1
 // 精英變種：跟首領共用「換色＋放大」那套做法，但是隨機出現在任何一般怪身上，
 // 不占地圖版面、不用新模型，純粹讓「這隻不太一樣」有機會發生在任何一場戰鬥裡。
@@ -5774,19 +5800,28 @@ function road(from, to) {
   }
 }
 
-// 怪物營地：以王座為圓心一圈一圈排，每圈的點數是偶數 → 自然 180° 對稱
+// 每種地圖大小各自配置四圈的營地數量，數字是照「地圖越大，怪物群跟著等比例變多」
+// 抓出來的，不是精算——營地數 × 每圈的隊伍人數（tier1=3、其他=4）大概對得上
+// 使用者要的總數（16→32、32→64、64→128、96→192、128→256），沒有到小數點對齊。
+const CAMP_RING_N = {
+  16: [4, 2, 2, 2],
+  32: [8, 4, 4, 4],
+  64: [16, 8, 8, 8],
+  96: [24, 12, 12, 12],
+  128: [32, 16, 16, 16]
+};
+// 怪物營地：以王座為圓心一圈一圈排，每圈的點數是偶數 → 自然 180° 對稱。
+// 半徑由外而內對到 tier1～tier4，tier4 貼著王座本體，是滿等的最終守衛。
 function placeCamps() {
   CAMPS = [];
   const c = THRONE[0];
-  const big = W > 34, small = W <= 20;
+  const n = CAMP_RING_N[W] || CAMP_RING_N[32];
   const rings = [
-    { r: W * 0.17, n: 4, tier: 3 },
-    { r: W * 0.31, n: big ? 8 : small ? 4 : 6, tier: 2 },
-    { r: W * 0.44, n: big ? 10 : small ? 4 : 6, tier: 1 }
+    { r: W * 0.44, n: n[0], tier: 1 },
+    { r: W * 0.31, n: n[1], tier: 2 },
+    { r: W * 0.17, n: n[2], tier: 3 },
+    { r: W * 0.08, n: n[3], tier: 4 }
   ];
-  if (W > 46) rings.push({ r: W * 0.46, n: 8, tier: 1 });
-  // 王座的最終守衛：貼著王座本體，只有夠大的地圖才擠得下、不會跟王座柱子疊在一起
-  if (W >= 48) rings.push({ r: W * 0.08, n: 4, tier: 4 });
   for (const g of rings) {
     for (let i = 0; i < g.n; i++) {
       const a = (i / g.n) * Math.PI * 2 + g.tier * 0.6;
@@ -5961,7 +5996,7 @@ function buildWorld() {
 
   // ── 地形裝飾 ──
   // 各模型的原始尺寸差很多（樹約 0.6 寬、石頭只有 0.3），倍率是量過的
-  const treeA = [], treeB = [], rocks = [], smallRocks = [], plants = [], lilies = [];
+  const treeA = [], treeB = [], rocks = [], smallRocks = [], plants = [], lilies = [], peaks = [];
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const t = MAP[y][x], h = TER[t].h;
     const jx = (rng() - 0.5) * 0.9, jz = (rng() - 0.5) * 0.9, ry = rng() * 6.28;
@@ -5970,8 +6005,11 @@ function buildWorld() {
       if (rng() < 0.55)
         (rng() < 0.5 ? treeA : treeB).push(trs(wx(x) - jx, h, wz(y) - jz, rng() * 6.28, 1.2 + rng() * 0.4));
     } else if (t === 'M') {
-      rocks.push(trs(wx(x) + jx * 0.4, h - 0.1, wz(y) + jz * 0.4, ry, 5.2 + rng() * 1.6));
-      if (rng() < 0.6) smallRocks.push(trs(wx(x) - jx, h, wz(y) - jz, rng() * 6.28, 3.2));
+      // 山地跟石頭障礙（K）之前共用同一顆 rock_c，長得一模一樣分不出來。
+      // 改用 rock_a（之前完全沒用到的第三種素材）疊一顆很大的主峰，配一兩棵樹，
+      // 「一大顆＋有樹」跟 K 那種「矮胖一叢好幾顆、光禿禿」的輪廓差很多，一眼就分得出。
+      peaks.push(trs(wx(x), h - 0.15, wz(y), ry, 7.5 + rng() * 2.2));
+      if (rng() < 0.5) (rng() < 0.5 ? treeA : treeB).push(trs(wx(x) + jx, h, wz(y) + jz, rng() * 6.28, 1.0 + rng() * 0.3));
     } else if (t === 'K') {
       // 石頭障礙：故意疊高疊密一點，一眼就看得出這格不能走、也擋視線
       rocks.push(trs(wx(x), h - 0.1, wz(y), ry, 6.4 + rng() * 2.0));
@@ -5987,6 +6025,7 @@ function buildWorld() {
   }
   addInstances('tree_a', treeA);
   addInstances('tree_b', treeB);
+  addInstances('rock_a', peaks);
   addInstances('rock_c', rocks);
   addInstances('rock_b', smallRocks);
   addInstances('waterplant', plants);
@@ -6956,7 +6995,7 @@ function mkMon(kind, x, y, camp) {
   const elite = !m.boss && grng() < MON_ELITE.chance;   // 首領自己就是尖兵，不用再疊精英
   const u = {
     id: uidSeq++, side: 2, kind, x, y, dir: Math.floor(grng() * 8), turned: false,
-    lv: MON_LV[tier], exp: 0, moved: false, acted: false, alive: true,
+    lv: monLvFor(tier), exp: 0, moved: false, acted: false, alive: true,
     equip: {}, cds: {}, st: [], awake: false, home: [x, y],
     camp: camp ? camp.id : -1, tier, elite
   };
@@ -8352,9 +8391,50 @@ async function pickupArenaBuff(u) {
   await wait(250);
 }
 
-// 進競技場的大字提示：跟 turnBanner() 同一套飛行動畫，但固定橘色、
-// 不跟著 G.cur 的隊伍色走——這是雙方共同的事件，不是某一邊的回合
-function arenaBanner() { showBanner('競技場', 'arena', $('turnNo'), 900); }
+// 進競技場的轉場動畫：獨立一套，不走 showBanner()「飛到小面板」那套邏輯——
+// 進競技場是雙方共同的大事件，值得比一般換邊回合更隆重一點。
+// 節奏：灰階模糊淡入＋字放大（0.7 秒）→ 字左右搖晃像船一樣，維持到第 5 秒 →
+// 灰色背景從畫面邊緣退回中心（2 秒），退到一半時字滑出左邊消失。
+// 不 await 呼叫端——這純粹是疊在畫面上的動畫，不該卡住地圖/鏡頭的真正切換。
+async function arenaBanner() {
+  const el = $('arenaFx'), txt = $('arenaFxTxt');
+  el.style.setProperty('--r', '0%');
+  el.style.setProperty('--blur', '0px');
+  txt.className = '';
+  txt.style.transition = 'none';
+  txt.style.transform = 'scale(.3)';
+  txt.style.opacity = '0';
+  el.classList.remove('hide');
+  void el.offsetWidth;
+  el.classList.add('show');
+
+  await tween(700, k => {
+    const e = easeOut(k);
+    el.style.setProperty('--r', (e * 120) + '%');
+    el.style.setProperty('--blur', (e * 6) + 'px');
+    txt.style.transform = `scale(${0.3 + 0.7 * e})`;
+    txt.style.opacity = e;
+  });
+  // 進場補間結束後要把 inline 的 transform/opacity 清掉，不然等一下切到
+  // .grown／.leaving 這兩個用 class 控制動畫的階段，inline 樣式優先權比 class
+  // 高，會把 CSS 動畫「應該要動的值」蓋掉，變成看起來完全沒有搖晃／滑出效果。
+  txt.style.transition = '';
+  txt.style.transform = '';
+  txt.style.opacity = '';
+  txt.classList.add('grown');
+
+  await wait(5000 - 700);
+
+  txt.classList.remove('grown');
+  setTimeout(() => txt.classList.add('leaving'), 1000);
+  await tween(2000, k => {
+    const e = k * k;   // ease-in：退場一開始慢，後面加速收尾
+    el.style.setProperty('--r', (120 * (1 - e)) + '%');
+    el.style.setProperty('--blur', (6 * (1 - e)) + 'px');
+  });
+  el.classList.remove('show');
+  el.classList.add('hide');
+}
 
 /* ───── shop.js ───── */
 /* ══════════════ 商店 ══════════════
@@ -10406,9 +10486,24 @@ function aiSkills() {
     }
 }
 
+// 電腦接管的一方沒有玩家會去點背包，屬性點和裝備就只能放著不管——
+// 每次輪到它出手前先自動分配掉，跟玩家自己按「一鍵裝備」／屬性點按鈕是同一套函式，
+// 只是換電腦幫自己按。屬性點沒有精算，攻擊/生命/防禦輪流分一輪，不求最優、
+// 求「至少不要浪費在那邊」。
+function aiManageSelf() {
+  const order = ['atk', 'hp', 'atk', 'def'];
+  for (const u of G.units) {
+    if (u.side !== AI_SIDE || !isHero(u)) continue;
+    let i = 0;
+    while (u.pts > 0) { doSpend(u, order[i % order.length]); i++; }
+  }
+  autoGearAll();
+}
+
 async function aiTurn() {
   if (!aiOn || mode !== 'local' || G.cur !== AI_SIDE || G.over) return;
   while (busy) await wait(120);
+  aiManageSelf();
   aiSkills();
 
   for (let guard = 0; guard < 60; guard++) {
@@ -10786,6 +10881,14 @@ async function boot() {
     bar.style.width = ((i + 1) / (names.length + 2) * 100) + '%';
   }
   CLIPS.push(...MODELS.anims.animations);
+  // 素材本身的錯誤：遊俠模型裡的「1H_Crossbow」旋轉值跟其他所有武器
+  // （劍/斧/杖/弓……全部都是 [π,0,-π]）不一樣，唯獨這把是 [0,π/2,0]，
+  // 導致弩弓卡進手臂/身體裡，從大部分視角看起來像「武器完全不見了」，
+  // 只有影子還看得出形狀。直接在共用的模型範本上修正一次旋轉即可，
+  // 不用動 buildUnitView() 的邏輯——之後所有複製體（含頭像預覽）都會沿用這個修正。
+  MODELS.Rogue.scene.traverse(c => {
+    if (c.name === '1H_Crossbow') c.rotation.set(Math.PI, 0, -Math.PI);
+  });
 
   // 開發用：讓瀏覽器主控台看得到內部狀態
   window.__dbg = {

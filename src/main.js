@@ -111,6 +111,14 @@ async function boot() {
     bar.style.width = ((i + 1) / (names.length + 2) * 100) + '%';
   }
   CLIPS.push(...MODELS.anims.animations);
+  // 素材本身的錯誤：遊俠模型裡的「1H_Crossbow」旋轉值跟其他所有武器
+  // （劍/斧/杖/弓……全部都是 [π,0,-π]）不一樣，唯獨這把是 [0,π/2,0]，
+  // 導致弩弓卡進手臂/身體裡，從大部分視角看起來像「武器完全不見了」，
+  // 只有影子還看得出形狀。直接在共用的模型範本上修正一次旋轉即可，
+  // 不用動 buildUnitView() 的邏輯——之後所有複製體（含頭像預覽）都會沿用這個修正。
+  MODELS.Rogue.scene.traverse(c => {
+    if (c.name === '1H_Crossbow') c.rotation.set(Math.PI, 0, -Math.PI);
+  });
 
   // 開發用：讓瀏覽器主控台看得到內部狀態
   window.__dbg = {

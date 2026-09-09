@@ -449,8 +449,27 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
 #turnBanner.s1 #turnBigTxt{color:#ff9a8a}
 #turnBanner.s2 #turnBigTxt{color:#b9aeff;font-size:44px;letter-spacing:6px}
 #turnBanner.shop #turnBigTxt{color:var(--gold);font-size:52px;letter-spacing:8px}
-#turnBanner.arena #turnBigTxt{color:#ff9a4a;font-size:52px;letter-spacing:8px}
 /* 拿掉「輪到你就是金色」的特例——直接用該隊自己的顏色，藍方回合就是藍色 */
+
+/* ── 進競技場的轉場：專屬一套動畫，不走 showBanner() 那套飛到角落的邏輯 ──
+   灰色背景用 radial-gradient 配一個可以動畫的 --r 變數：r 是「還蓋著灰色」的
+   半徑百分比，r 從 0（還沒蓋）長到 100+（整片蓋滿）是進場，退場反過來從
+   100 縮到 0——縮小的過程中，圓外（已經小於 r 的地方）先變回透明，
+   所以看起來是「從畫面邊緣開始退，最後才收到中間」。 */
+#arenaFx{position:fixed;inset:0;z-index:47;display:flex;align-items:center;justify-content:center;
+  pointer-events:none;zoom:var(--uiscale);opacity:0}
+#arenaFx.show{opacity:1}
+#arenaFx::before{content:'';position:absolute;inset:0;
+  background:radial-gradient(circle at center,rgba(60,62,68,.94) 0%,rgba(60,62,68,.94) var(--r,0%),
+    rgba(60,62,68,0) calc(var(--r,0%) + 18%));
+  backdrop-filter:blur(var(--blur,0px));-webkit-backdrop-filter:blur(var(--blur,0px))}
+#arenaFxTxt{position:relative;font-size:56px;font-weight:800;letter-spacing:10px;color:var(--gold);
+  text-shadow:0 4px 30px #000,0 0 70px currentColor;white-space:nowrap;
+  transform:scale(.3);opacity:0;will-change:transform,opacity}
+#arenaFxTxt.grown{animation:arenaSway 2.1s ease-in-out infinite}
+#arenaFxTxt.leaving{transition:transform 1s ease-in,opacity 1s ease-in;
+  transform:translateX(-60vw) rotate(-8deg);opacity:0}
+@keyframes arenaSway{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
 
 /* 上面面板的「輪到誰」 */
 #turnWho em{font-style:normal;font-size:10.5px;color:var(--dim);margin-left:5px}

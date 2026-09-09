@@ -238,6 +238,47 @@ async function pickupArenaBuff(u) {
   await wait(250);
 }
 
-// 進競技場的大字提示：跟 turnBanner() 同一套飛行動畫，但固定橘色、
-// 不跟著 G.cur 的隊伍色走——這是雙方共同的事件，不是某一邊的回合
-function arenaBanner() { showBanner('競技場', 'arena', $('turnNo'), 900); }
+// 進競技場的轉場動畫：獨立一套，不走 showBanner()「飛到小面板」那套邏輯——
+// 進競技場是雙方共同的大事件，值得比一般換邊回合更隆重一點。
+// 節奏：灰階模糊淡入＋字放大（0.7 秒）→ 字左右搖晃像船一樣，維持到第 5 秒 →
+// 灰色背景從畫面邊緣退回中心（2 秒），退到一半時字滑出左邊消失。
+// 不 await 呼叫端——這純粹是疊在畫面上的動畫，不該卡住地圖/鏡頭的真正切換。
+async function arenaBanner() {
+  const el = $('arenaFx'), txt = $('arenaFxTxt');
+  el.style.setProperty('--r', '0%');
+  el.style.setProperty('--blur', '0px');
+  txt.className = '';
+  txt.style.transition = 'none';
+  txt.style.transform = 'scale(.3)';
+  txt.style.opacity = '0';
+  el.classList.remove('hide');
+  void el.offsetWidth;
+  el.classList.add('show');
+
+  await tween(700, k => {
+    const e = easeOut(k);
+    el.style.setProperty('--r', (e * 120) + '%');
+    el.style.setProperty('--blur', (e * 6) + 'px');
+    txt.style.transform = `scale(${0.3 + 0.7 * e})`;
+    txt.style.opacity = e;
+  });
+  // 進場補間結束後要把 inline 的 transform/opacity 清掉，不然等一下切到
+  // .grown／.leaving 這兩個用 class 控制動畫的階段，inline 樣式優先權比 class
+  // 高，會把 CSS 動畫「應該要動的值」蓋掉，變成看起來完全沒有搖晃／滑出效果。
+  txt.style.transition = '';
+  txt.style.transform = '';
+  txt.style.opacity = '';
+  txt.classList.add('grown');
+
+  await wait(5000 - 700);
+
+  txt.classList.remove('grown');
+  setTimeout(() => txt.classList.add('leaving'), 1000);
+  await tween(2000, k => {
+    const e = k * k;   // ease-in：退場一開始慢，後面加速收尾
+    el.style.setProperty('--r', (120 * (1 - e)) + '%');
+    el.style.setProperty('--blur', (6 * (1 - e)) + 'px');
+  });
+  el.classList.remove('show');
+  el.classList.add('hide');
+}

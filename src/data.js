@@ -3,7 +3,7 @@
 
 let W = 27, H = 27;                      // 地圖邊長，開局時由選單決定
 const TILE = 2;
-const SIZES = [16, 24, 32, 48, 64];      // 可選的地圖大小
+const SIZES = [16, 32, 64, 96, 128];     // 可選的地圖大小
 let THRONE = [13, 13];                   // 正中央，setSize() 會重算
 const THRONE_WIN = 5;                    // 連續佔領幾回合獲勝
 const AGGRO = 3;                         // 怪物驚醒距離
@@ -11,9 +11,15 @@ const LEASH = 8;                         // 怪物離營地最遠追多少格
 const REVIVE_TURNS = 3;                  // 英雄倒下後幾回合在營地復活
 const REVIVE_DASH = 2;                   // 復活後兩回合的額外移動力
 const CAMP_HEAL = 0.25;                  // 站在營地周圍一格，每回合回復最大生命的幾成
-// 怪群等級（依營地離王座的遠近）。英雄封頂 Lv10，第 4 級是貼著王座本體的
-// 最終守衛，滿級站崗——只有夠大的地圖（48×48 以上）才擠得下這一圈，見 placeCamps()。
-const MON_LV = { 1: 1, 2: 4, 3: 7, 4: 10 };
+// 怪群等級（依營地離王座的遠近）。英雄封頂 Lv10，但怪物的最高等級跟著地圖大小走——
+// 地圖越大，遊戲拖越長，角色也該練得越高，中心的最終守衛才有意義（不是站著的經驗值）。
+// 四圈由外而內（tier1～tier4）各佔地圖最高等級的比例，比例本身是抓的，不是精算出來的。
+const MON_MAXLV_BY_SIZE = { 16: 7, 32: 10, 64: 15, 96: 22, 128: 30 };
+const MON_LV_RATIO = [0.1, 0.4, 0.7, 1.0];
+function monLvFor(tier) {
+  const maxLv = MON_MAXLV_BY_SIZE[W] || MON_MAXLV_BY_SIZE[32];
+  return Math.max(1, Math.round(maxLv * MON_LV_RATIO[tier - 1]));
+}
 const MON_REVIVE_BASE = 5;               // 怪物重生的底線回合數，之後每一等 +1
 // 精英變種：跟首領共用「換色＋放大」那套做法，但是隨機出現在任何一般怪身上，
 // 不占地圖版面、不用新模型，純粹讓「這隻不太一樣」有機會發生在任何一場戰鬥裡。

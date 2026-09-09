@@ -274,7 +274,7 @@ function mkMon(kind, x, y, camp) {
   const elite = !m.boss && grng() < MON_ELITE.chance;   // 首領自己就是尖兵，不用再疊精英
   const u = {
     id: uidSeq++, side: 2, kind, x, y, dir: Math.floor(grng() * 8), turned: false,
-    lv: MON_LV[tier], exp: 0, moved: false, acted: false, alive: true,
+    lv: monLvFor(tier), exp: 0, moved: false, acted: false, alive: true,
     equip: {}, cds: {}, st: [], awake: false, home: [x, y],
     camp: camp ? camp.id : -1, tier, elite
   };

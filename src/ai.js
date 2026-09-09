@@ -199,9 +199,24 @@ function aiSkills() {
     }
 }
 
+// 電腦接管的一方沒有玩家會去點背包，屬性點和裝備就只能放著不管——
+// 每次輪到它出手前先自動分配掉，跟玩家自己按「一鍵裝備」／屬性點按鈕是同一套函式，
+// 只是換電腦幫自己按。屬性點沒有精算，攻擊/生命/防禦輪流分一輪，不求最優、
+// 求「至少不要浪費在那邊」。
+function aiManageSelf() {
+  const order = ['atk', 'hp', 'atk', 'def'];
+  for (const u of G.units) {
+    if (u.side !== AI_SIDE || !isHero(u)) continue;
+    let i = 0;
+    while (u.pts > 0) { doSpend(u, order[i % order.length]); i++; }
+  }
+  autoGearAll();
+}
+
 async function aiTurn() {
   if (!aiOn || mode !== 'local' || G.cur !== AI_SIDE || G.over) return;
   while (busy) await wait(120);
+  aiManageSelf();
   aiSkills();
 
   for (let guard = 0; guard < 60; guard++) {

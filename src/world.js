@@ -145,19 +145,28 @@ function road(from, to) {
   }
 }
 
-// 怪物營地：以王座為圓心一圈一圈排，每圈的點數是偶數 → 自然 180° 對稱
+// 每種地圖大小各自配置四圈的營地數量，數字是照「地圖越大，怪物群跟著等比例變多」
+// 抓出來的，不是精算——營地數 × 每圈的隊伍人數（tier1=3、其他=4）大概對得上
+// 使用者要的總數（16→32、32→64、64→128、96→192、128→256），沒有到小數點對齊。
+const CAMP_RING_N = {
+  16: [4, 2, 2, 2],
+  32: [8, 4, 4, 4],
+  64: [16, 8, 8, 8],
+  96: [24, 12, 12, 12],
+  128: [32, 16, 16, 16]
+};
+// 怪物營地：以王座為圓心一圈一圈排，每圈的點數是偶數 → 自然 180° 對稱。
+// 半徑由外而內對到 tier1～tier4，tier4 貼著王座本體，是滿等的最終守衛。
 function placeCamps() {
   CAMPS = [];
   const c = THRONE[0];
-  const big = W > 34, small = W <= 20;
+  const n = CAMP_RING_N[W] || CAMP_RING_N[32];
   const rings = [
-    { r: W * 0.17, n: 4, tier: 3 },
-    { r: W * 0.31, n: big ? 8 : small ? 4 : 6, tier: 2 },
-    { r: W * 0.44, n: big ? 10 : small ? 4 : 6, tier: 1 }
+    { r: W * 0.44, n: n[0], tier: 1 },
+    { r: W * 0.31, n: n[1], tier: 2 },
+    { r: W * 0.17, n: n[2], tier: 3 },
+    { r: W * 0.08, n: n[3], tier: 4 }
   ];
-  if (W > 46) rings.push({ r: W * 0.46, n: 8, tier: 1 });
-  // 王座的最終守衛：貼著王座本體，只有夠大的地圖才擠得下、不會跟王座柱子疊在一起
-  if (W >= 48) rings.push({ r: W * 0.08, n: 4, tier: 4 });
   for (const g of rings) {
     for (let i = 0; i < g.n; i++) {
       const a = (i / g.n) * Math.PI * 2 + g.tier * 0.6;
@@ -332,7 +341,7 @@ function buildWorld() {
 
   // ── 地形裝飾 ──
   // 各模型的原始尺寸差很多（樹約 0.6 寬、石頭只有 0.3），倍率是量過的
-  const treeA = [], treeB = [], rocks = [], smallRocks = [], plants = [], lilies = [];
+  const treeA = [], treeB = [], rocks = [], smallRocks = [], plants = [], lilies = [], peaks = [];
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const t = MAP[y][x], h = TER[t].h;
     const jx = (rng() - 0.5) * 0.9, jz = (rng() - 0.5) * 0.9, ry = rng() * 6.28;
@@ -341,8 +350,11 @@ function buildWorld() {
       if (rng() < 0.55)
         (rng() < 0.5 ? treeA : treeB).push(trs(wx(x) - jx, h, wz(y) - jz, rng() * 6.28, 1.2 + rng() * 0.4));
     } else if (t === 'M') {
-      rocks.push(trs(wx(x) + jx * 0.4, h - 0.1, wz(y) + jz * 0.4, ry, 5.2 + rng() * 1.6));
-      if (rng() < 0.6) smallRocks.push(trs(wx(x) - jx, h, wz(y) - jz, rng() * 6.28, 3.2));
+      // 山地跟石頭障礙（K）之前共用同一顆 rock_c，長得一模一樣分不出來。
+      // 改用 rock_a（之前完全沒用到的第三種素材）疊一顆很大的主峰，配一兩棵樹，
+      // 「一大顆＋有樹」跟 K 那種「矮胖一叢好幾顆、光禿禿」的輪廓差很多，一眼就分得出。
+      peaks.push(trs(wx(x), h - 0.15, wz(y), ry, 7.5 + rng() * 2.2));
+      if (rng() < 0.5) (rng() < 0.5 ? treeA : treeB).push(trs(wx(x) + jx, h, wz(y) + jz, rng() * 6.28, 1.0 + rng() * 0.3));
     } else if (t === 'K') {
       // 石頭障礙：故意疊高疊密一點，一眼就看得出這格不能走、也擋視線
       rocks.push(trs(wx(x), h - 0.1, wz(y), ry, 6.4 + rng() * 2.0));
@@ -358,6 +370,7 @@ function buildWorld() {
   }
   addInstances('tree_a', treeA);
   addInstances('tree_b', treeB);
+  addInstances('rock_a', peaks);
   addInstances('rock_c', rocks);
   addInstances('rock_b', smallRocks);
   addInstances('waterplant', plants);
