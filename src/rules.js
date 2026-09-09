@@ -271,10 +271,12 @@ function mkHero(side, cls, x, y) {
 function mkMon(kind, x, y, camp) {
   const m = MON[kind];
   const tier = camp ? camp.tier : 1;
+  // 等級用這個營地離王座的實際距離連續算，不是看 tier 分四級跳——
+  // 同一個 tier 裡的營地遠近不同，等級也會有一點點差異，不會突然跳一大截。
   const elite = !m.boss && grng() < MON_ELITE.chance;   // 首領自己就是尖兵，不用再疊精英
   const u = {
     id: uidSeq++, side: 2, kind, x, y, dir: Math.floor(grng() * 8), turned: false,
-    lv: monLvFor(tier), exp: 0, moved: false, acted: false, alive: true,
+    lv: monLvFor(camp ? camp.frac : 1), exp: 0, moved: false, acted: false, alive: true,
     equip: {}, cds: {}, st: [], awake: false, home: [x, y],
     camp: camp ? camp.id : -1, tier, elite
   };

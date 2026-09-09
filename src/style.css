@@ -463,13 +463,16 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
   background:radial-gradient(circle at center,rgba(60,62,68,.94) 0%,rgba(60,62,68,.94) var(--r,0%),
     rgba(60,62,68,0) calc(var(--r,0%) + 18%));
   backdrop-filter:blur(var(--blur,0px));-webkit-backdrop-filter:blur(var(--blur,0px))}
+/* 進場前的初始狀態（縮小、透明）刻意不寫在這個基礎規則裡，改由
+   arenaBanner() 自己用 inline style 設定——這裡如果寫死 transform/opacity，
+   之後任何一個階段只要清掉 inline 樣式接手給 class 控制動畫，就會被
+   打回這裡的值：先前 .grown 忘了補 opacity 就是這樣「剛出現就消失」；
+   .leaving 接手時也會被這裡的 scale(.3) 打斷，變成「搖晃到一半忽然
+   跳成縮小、才開始滑走」，看起來像瞬間消失。基礎規則只留跟動畫無關
+   的樣式，可能會變動的 transform/opacity 全部交給 JS／class 自己管。 */
 #arenaFxTxt{position:relative;font-size:56px;font-weight:800;letter-spacing:10px;color:var(--gold);
   text-shadow:0 4px 30px #000,0 0 70px currentColor;white-space:nowrap;
-  transform:scale(.3);opacity:0;will-change:transform,opacity}
-/* 基礎規則的 opacity:0 是給進場動畫開始前那一瞬間用的；.grown 只有動
-   transform（搖晃），沒補 opacity:1 的話，補間結束清掉 inline 樣式的
-   那一刻就會整個打回基礎規則的 opacity:0，變成「才剛出現就直接消失、
-   搖晃動畫全程都是透明的」。 */
+  will-change:transform,opacity}
 #arenaFxTxt.grown{animation:arenaSway 2.1s ease-in-out infinite;opacity:1}
 /* 2 秒跟灰色背景退場的補間同一個長度，兩個要同時消失完，不是背景先淡完字才跟著跑 */
 #arenaFxTxt.leaving{transition:transform 2s ease-in,opacity 2s ease-in;

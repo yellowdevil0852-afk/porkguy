@@ -174,9 +174,10 @@ function placeCamps() {
       let tier = 1;
       for (let i = 0; i < CAMP_TIER_FRAC.length; i++) if (frac >= CAMP_TIER_FRAC[i]) { tier = i + 1; break; }
       const d = Math.abs(x - THRONE[0]) + Math.abs(y - THRONE[1]);
-      CAMPS.push({ id: CAMPS.length, x, y, tier, revive: d > NO_REVIVE_R });
+      CAMPS.push({ id: CAMPS.length, x, y, tier, frac, revive: d > NO_REVIVE_R });
 
       // 鏡射到地圖另一半，跟正排一樣要過同一輪檢查（正中央附近可能跟自己重疊，跳過）
+      // 鏡射點離王座的距離跟原點完全一樣（王座就是旋轉中心），frac 直接沿用不用重算
       const mx = W - 1 - x, my = H - 1 - y;
       if (mx === x && my === y) continue;
       const mt = MAP[my] ? MAP[my][mx] : undefined;
@@ -184,7 +185,7 @@ function placeCamps() {
       if (CAMP.some(p => Math.abs(p[0] - mx) + Math.abs(p[1] - my) < 4)) continue;
       if (CAMPS.some(p => Math.abs(p.x - mx) + Math.abs(p.y - my) < 3)) continue;
       const md = Math.abs(mx - THRONE[0]) + Math.abs(my - THRONE[1]);
-      CAMPS.push({ id: CAMPS.length, x: mx, y: my, tier, revive: md > NO_REVIVE_R });
+      CAMPS.push({ id: CAMPS.length, x: mx, y: my, tier, frac, revive: md > NO_REVIVE_R });
     }
   }
 }

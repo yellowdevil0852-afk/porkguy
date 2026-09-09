@@ -469,13 +469,16 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
   background:radial-gradient(circle at center,rgba(60,62,68,.94) 0%,rgba(60,62,68,.94) var(--r,0%),
     rgba(60,62,68,0) calc(var(--r,0%) + 18%));
   backdrop-filter:blur(var(--blur,0px));-webkit-backdrop-filter:blur(var(--blur,0px))}
+/* 進場前的初始狀態（縮小、透明）刻意不寫在這個基礎規則裡，改由
+   arenaBanner() 自己用 inline style 設定——這裡如果寫死 transform/opacity，
+   之後任何一個階段只要清掉 inline 樣式接手給 class 控制動畫，就會被
+   打回這裡的值：先前 .grown 忘了補 opacity 就是這樣「剛出現就消失」；
+   .leaving 接手時也會被這裡的 scale(.3) 打斷，變成「搖晃到一半忽然
+   跳成縮小、才開始滑走」，看起來像瞬間消失。基礎規則只留跟動畫無關
+   的樣式，可能會變動的 transform/opacity 全部交給 JS／class 自己管。 */
 #arenaFxTxt{position:relative;font-size:56px;font-weight:800;letter-spacing:10px;color:var(--gold);
   text-shadow:0 4px 30px #000,0 0 70px currentColor;white-space:nowrap;
-  transform:scale(.3);opacity:0;will-change:transform,opacity}
-/* 基礎規則的 opacity:0 是給進場動畫開始前那一瞬間用的；.grown 只有動
-   transform（搖晃），沒補 opacity:1 的話，補間結束清掉 inline 樣式的
-   那一刻就會整個打回基礎規則的 opacity:0，變成「才剛出現就直接消失、
-   搖晃動畫全程都是透明的」。 */
+  will-change:transform,opacity}
 #arenaFxTxt.grown{animation:arenaSway 2.1s ease-in-out infinite;opacity:1}
 /* 2 秒跟灰色背景退場的補間同一個長度，兩個要同時消失完，不是背景先淡完字才跟著跑 */
 #arenaFxTxt.leaving{transition:transform 2s ease-in,opacity 2s ease-in;
@@ -5073,12 +5076,12 @@ const REVIVE_DASH = 2;                   // 復活後兩回合的額外移動力
 const CAMP_HEAL = 0.25;                  // 站在營地周圍一格，每回合回復最大生命的幾成
 // 怪群等級（依營地離王座的遠近）。英雄封頂 Lv10，但怪物的最高等級跟著地圖大小走——
 // 地圖越大，遊戲拖越長，角色也該練得越高，中心的最終守衛才有意義（不是站著的經驗值）。
-// 四圈由外而內（tier1～tier4）各佔地圖最高等級的比例，比例本身是抓的，不是精算出來的。
 const MON_MAXLV_BY_SIZE = { 16: 7, 32: 10, 64: 15, 96: 22, 128: 30 };
-const MON_LV_RATIO = [0.1, 0.4, 0.7, 1.0];
-function monLvFor(tier) {
+// 等級是離王座距離的連續函式，不是分成四級跳的——frac 是 0（王座）～1（最外圍）
+// 的距離比例，等級從最高等級線性遞減到 1，每一級都可能出現，不會有大跳躍。
+function monLvFor(frac) {
   const maxLv = MON_MAXLV_BY_SIZE[W] || MON_MAXLV_BY_SIZE[32];
-  return Math.max(1, Math.round(maxLv * MON_LV_RATIO[tier - 1]));
+  return Math.max(1, Math.round(maxLv - (maxLv - 1) * frac));
 }
 const MON_REVIVE_BASE = 5;               // 怪物重生的底線回合數，之後每一等 +1
 // 精英變種：跟首領共用「換色＋放大」那套做法，但是隨機出現在任何一般怪身上，
@@ -5834,9 +5837,10 @@ function placeCamps() {
       let tier = 1;
       for (let i = 0; i < CAMP_TIER_FRAC.length; i++) if (frac >= CAMP_TIER_FRAC[i]) { tier = i + 1; break; }
       const d = Math.abs(x - THRONE[0]) + Math.abs(y - THRONE[1]);
-      CAMPS.push({ id: CAMPS.length, x, y, tier, revive: d > NO_REVIVE_R });
+      CAMPS.push({ id: CAMPS.length, x, y, tier, frac, revive: d > NO_REVIVE_R });
 
       // 鏡射到地圖另一半，跟正排一樣要過同一輪檢查（正中央附近可能跟自己重疊，跳過）
+      // 鏡射點離王座的距離跟原點完全一樣（王座就是旋轉中心），frac 直接沿用不用重算
       const mx = W - 1 - x, my = H - 1 - y;
       if (mx === x && my === y) continue;
       const mt = MAP[my] ? MAP[my][mx] : undefined;
@@ -5844,7 +5848,7 @@ function placeCamps() {
       if (CAMP.some(p => Math.abs(p[0] - mx) + Math.abs(p[1] - my) < 4)) continue;
       if (CAMPS.some(p => Math.abs(p.x - mx) + Math.abs(p.y - my) < 3)) continue;
       const md = Math.abs(mx - THRONE[0]) + Math.abs(my - THRONE[1]);
-      CAMPS.push({ id: CAMPS.length, x: mx, y: my, tier, revive: md > NO_REVIVE_R });
+      CAMPS.push({ id: CAMPS.length, x: mx, y: my, tier, frac, revive: md > NO_REVIVE_R });
     }
   }
 }
@@ -7004,10 +7008,12 @@ function mkHero(side, cls, x, y) {
 function mkMon(kind, x, y, camp) {
   const m = MON[kind];
   const tier = camp ? camp.tier : 1;
+  // 等級用這個營地離王座的實際距離連續算，不是看 tier 分四級跳——
+  // 同一個 tier 裡的營地遠近不同，等級也會有一點點差異，不會突然跳一大截。
   const elite = !m.boss && grng() < MON_ELITE.chance;   // 首領自己就是尖兵，不用再疊精英
   const u = {
     id: uidSeq++, side: 2, kind, x, y, dir: Math.floor(grng() * 8), turned: false,
-    lv: monLvFor(tier), exp: 0, moved: false, acted: false, alive: true,
+    lv: monLvFor(camp ? camp.frac : 1), exp: 0, moved: false, acted: false, alive: true,
     equip: {}, cds: {}, st: [], awake: false, home: [x, y],
     camp: camp ? camp.id : -1, tier, elite
   };
