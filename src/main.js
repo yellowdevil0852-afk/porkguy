@@ -65,13 +65,18 @@ function startPlay(picks) {
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(0.05, clock.getDelta());
-  // 只更新鏡頭附近的骨骼動畫，遠處的先凍住（大地圖上動輒五十幾個單位）
+  // 鏡頭附近以外的單位不只不更新骨骼動畫，模型本身也直接設 invisible 不進渲染流程——
+  // 地圖跟怪物數量都比以前大很多（大地圖動輒好幾百隻怪），每隻都是獨立的蒙皮網格、
+  // 各自一個 draw call，光是遠處那些平常看不到的也丟給 GPU 處理會很拖幀率。
+  // 選中/滑鼠指到的單位不管多遠都維持可見，不然選單位之後鏡頭還沒轉過去會憑空消失。
   const R2 = (camDist * 1.4 + 24) ** 2;
   for (const u of G.units) {
     if (!u.view) continue;
     const p = u.view.g.position;
     const dx = p.x - camTarget.x, dz = p.z - camTarget.z;
-    if (dx * dx + dz * dz < R2 || performance.now() - u.view.lastPlay < 2500) u.view.mixer.update(dt);
+    const near = dx * dx + dz * dz < R2;
+    u.view.g.visible = near || u === sel || u === hoverUnit;
+    if (near || performance.now() - u.view.lastPlay < 2500) u.view.mixer.update(dt);
   }
   panStep(dt);
   updateFX(dt);

@@ -5803,7 +5803,8 @@ function road(from, to) {
 
 // 每種地圖大小各自配置四圈的營地數量，數字是照「地圖越大，怪物群跟著等比例變多」
 // 抓出來的，不是精算——營地數 × 每圈的隊伍人數（tier1=3、其他=4）大概對得上
-// 使用者要的總數（16→32、32→64、64→128、96→192、128→256），沒有到小數點對齊。
+// 使用者要的總數量級，沒有到小數點對齊，也刻意不加重試機制去湊精確值：
+// 密度太高硬要湊滿會逼營地擠壓成好幾圈同心圓的不自然排列，數量差一點比較好看。
 const CAMP_RING_N = {
   16: [4, 2, 2, 2],
   32: [8, 4, 4, 4],
@@ -5823,33 +5824,17 @@ function placeCamps() {
     { r: W * 0.17, n: n[2], tier: 3 },
     { r: W * 0.08, n: n[3], tier: 4 }
   ];
-  const fits = (x, y) => {
-    if (!inBoard(x, y)) return false;
-    const t = MAP[y][x];
-    if (t === 'W' || t === 'T' || t === 'C' || t === 'K') return false;
-    if (CAMPS.some(p => Math.abs(p.x - x) + Math.abs(p.y - y) < 2)) return false;
-    if (CAMP.some(p => Math.abs(p[0] - x) + Math.abs(p[1] - y) < 4)) return false;
-    return true;
-  };
-  // 每圈角度算出來的第一個落點如果不行（撞到別的營地、地形不對），
-  // 沿著同一個角度往外/往內挪幾格再試——半徑微調不會破壞鏡射對稱
-  // （同一個角度的兩個鏡射點會拿到一樣的偏移量），角度越密（n 越大）
-  // 越常撞到，靠這個重試機制才不會地圖越大、怪物數量反而落差越大。
-  const RETRY_DR = [0, 3, -3, 6, -6, 9, -9];
   for (const g of rings) {
     for (let i = 0; i < g.n; i++) {
       const a = (i / g.n) * Math.PI * 2 + g.tier * 0.6;
-      let placed = false;
-      for (const dr of RETRY_DR) {
-        const r = Math.max(2, g.r + dr);
-        const x = Math.round(c + Math.cos(a) * r), y = Math.round(c + Math.sin(a) * r);
-        if (!fits(x, y)) continue;
-        const d = Math.abs(x - THRONE[0]) + Math.abs(y - THRONE[1]);
-        CAMPS.push({ id: CAMPS.length, x, y, tier: g.tier, revive: d > NO_REVIVE_R });
-        placed = true;
-        break;
-      }
-      if (!placed) continue;   // 試完還是放不下就放棄這個位置，總數會比要求的略少
+      const x = Math.round(c + Math.cos(a) * g.r), y = Math.round(c + Math.sin(a) * g.r);
+      if (!inBoard(x, y)) continue;
+      const t = MAP[y][x];
+      if (t === 'W' || t === 'T' || t === 'C' || t === 'K') continue;
+      if (CAMPS.some(p => Math.abs(p.x - x) + Math.abs(p.y - y) < 3)) continue;
+      if (CAMP.some(p => Math.abs(p[0] - x) + Math.abs(p[1] - y) < 4)) continue;
+      const d = Math.abs(x - THRONE[0]) + Math.abs(y - THRONE[1]);
+      CAMPS.push({ id: CAMPS.length, x, y, tier: g.tier, revive: d > NO_REVIVE_R });
     }
   }
 }
@@ -10853,13 +10838,18 @@ function startPlay(picks) {
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(0.05, clock.getDelta());
-  // 只更新鏡頭附近的骨骼動畫，遠處的先凍住（大地圖上動輒五十幾個單位）
+  // 鏡頭附近以外的單位不只不更新骨骼動畫，模型本身也直接設 invisible 不進渲染流程——
+  // 地圖跟怪物數量都比以前大很多（大地圖動輒好幾百隻怪），每隻都是獨立的蒙皮網格、
+  // 各自一個 draw call，光是遠處那些平常看不到的也丟給 GPU 處理會很拖幀率。
+  // 選中/滑鼠指到的單位不管多遠都維持可見，不然選單位之後鏡頭還沒轉過去會憑空消失。
   const R2 = (camDist * 1.4 + 24) ** 2;
   for (const u of G.units) {
     if (!u.view) continue;
     const p = u.view.g.position;
     const dx = p.x - camTarget.x, dz = p.z - camTarget.z;
-    if (dx * dx + dz * dz < R2 || performance.now() - u.view.lastPlay < 2500) u.view.mixer.update(dt);
+    const near = dx * dx + dz * dz < R2;
+    u.view.g.visible = near || u === sel || u === hoverUnit;
+    if (near || performance.now() - u.view.lastPlay < 2500) u.view.mixer.update(dt);
   }
   panStep(dt);
   updateFX(dt);
