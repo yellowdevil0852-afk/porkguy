@@ -58,7 +58,7 @@ function statOf(u, k) {
   if (isHero(u)) {
     if (u.lv >= PROMO_LV) v += PROMO[k] || 0;
     for (const s in u.equip) { const it = u.equip[s]; if (it && it[k]) v += it[k]; }
-    if (hasAffix(u, 'swift') && k === 'mov') v += 2;
+    if (k === 'mov') v += affixVal(u, 'swift');
   }
   if (isHero(u) && u.alloc && u.alloc[k]) v += u.alloc[k] * PT_GAIN[k];
   for (const b of u.st) if (ST_STAT[b.id] === k) v += b.v;
@@ -90,10 +90,16 @@ function rngOf(u) {
 }
 const dmgType = u => base(u).dmg;
 const armType = u => base(u).arm;
-function hasAffix(u, id) {
-  if (!isHero(u)) return false;
-  for (const s in u.equip) if (u.equip[s] && u.equip[s].affix === id) return true;
-  return false;
+function affixItem(u, id) {
+  if (!isHero(u)) return null;
+  for (const s in u.equip) if (u.equip[s] && u.equip[s].affix === id) return u.equip[s];
+  return null;
+}
+function hasAffix(u, id) { return !!affixItem(u, id); }
+// 詞綴的實際數值，按裝備品質查表（沒裝到這條詞綴就是 0）
+function affixVal(u, id) {
+  const it = affixItem(u, id);
+  return it ? AFFIX.find(a => a.id === id).val[it.r] || 0 : 0;
 }
 
 
@@ -111,7 +117,7 @@ const flankName = m => m === FLANK.back ? '背擊' : m === FLANK.side ? '側擊'
 
 // 相鄰的騎士提供減傷
 function guardOf(d) {
-  let g = hasAffix(d, 'guard') ? 2 : 0;
+  let g = affixVal(d, 'guard');
   for (const [dx, dy] of NB8) {
     const o = unitAt(d.x + dx, d.y + dy);
     if (o && o.side === d.side && o.cls === 'KN') { g += 2; break; }
@@ -127,7 +133,9 @@ function dmgCalc(a, d, opt) {
   else if (dt.high && !at.high) A -= 1;
 
   let D = defOf(d) + (opt.ignoreTer ? 0 : dt.def) + guardOf(d);
-  if (a.cls === 'MG' || hasAffix(a, 'rend')) D = Math.floor(D / 2);
+  const rend = affixVal(a, 'rend');
+  if (rend) D -= D * rend;
+  if (a.cls === 'MG') D = Math.floor(D / 2);   // 法師穿透被動，跟破甲詞綴分開算，不共用同一行
   D = Math.max(0, D);
 
   // 減傷曲線，見 data.js 的 MIT_K：防禦拉高傷害會越來越低，但不會像舊公式
@@ -327,12 +335,26 @@ function rollItem(q) {
     if (!g[k]) continue;
     it[k] = g[k] > 0 ? Math.max(1, Math.round(g[k] * RARITY[r].mult)) : g[k];
   }
-  if (r > 0 && grng() < 0.15 + r * 0.22) it.affix = AFFIX[Math.floor(grng() * AFFIX.length)].id;
+  if (r > 0 && grng() < 0.15 + r * 0.22) {
+    // 飾品不受部位限制、能抽到全部詞綴；武器/防具只能抽各自限定 + 任何部位通用的，
+    // 而且這個品質要真的有數值（val[r] 不是 null）才進候選池
+    const pool = AFFIX.filter(a => a.val[r] != null && (slot === 'trinket' || a.slot === slot || a.slot === 'any'));
+    if (pool.length) it.affix = pool[Math.floor(grng() * pool.length)].id;
+  }
   return it;
 }
 function itemName(it) {
   const a = it.affix ? AFFIX.find(x => x.id === it.affix).n + '之' : '';
   return a + it.n;
+}
+// 詞綴的說明文字，帶上這件裝備實際品質對應的數值
+function affixDesc(it) {
+  const af = AFFIX.find(x => x.id === it.affix);
+  if (af.id === 'first') return af.d;
+  const v = af.val[it.r];
+  // +／−之類的符號都寫在各自的 d 字串裡（swift 已經帶「+」），這裡不要重複加，
+  // 不然 swift 會變成「++2」
+  return af.d + (af.pct ? Math.round(v * 100) + '%' : v);
 }
 function itemStats(it) {
   const p = [];
@@ -536,8 +558,9 @@ async function strike(a, d, opt) {
   floatText(d.x, d.y, tag + real, crit ? 'crit' : 'dmg');
   updTag(d);
 
-  if (hasAffix(a, 'vamp')) {
-    const heal = Math.min(Math.ceil(real * 0.3), mhpOf(a) - a.hp);
+  const vampPct = affixVal(a, 'vamp');
+  if (vampPct) {
+    const heal = Math.min(Math.ceil(real * vampPct), mhpOf(a) - a.hp);
     if (heal > 0) { a.hp += heal; floatText(a.x, a.y, '+' + heal, 'heal'); updTag(a); }
   }
   log(`<span class="s${a.side}">${nameOf(a)}</span> → <span class="s${d.side}">${nameOf(d)}</span> <b>${real}</b>${tag ? '（' + tag.trim() + '）' : ''}`);
@@ -562,8 +585,9 @@ async function strike(a, d, opt) {
   }
 
   // 反傷
-  if (d.alive && d.hp > 0 && hasAffix(d, 'thorn') && dist(a, d) <= 1) {
-    const back = Math.max(1, Math.round(real * 0.25));
+  const thornPct = d.alive && d.hp > 0 && dist(a, d) <= 1 ? affixVal(d, 'thorn') : 0;
+  if (thornPct) {
+    const back = Math.max(1, Math.round(real * thornPct));
     a.hp -= back;
     floatText(a.x, a.y, String(back), 'dmg');
     updTag(a);
@@ -785,7 +809,7 @@ async function hit(u, t, s, opt) {
 function afterDamage(u, t, dmg) {
   let ls = pasOf(u, 'lifesteal');
   if (ls && u.hp / mhpOf(u) < 0.5) ls *= 2;
-  if (hasAffix(u, 'vamp')) ls += 0.3;
+  ls += affixVal(u, 'vamp');
   if (ls > 0) {
     const h = Math.min(Math.ceil(dmg * ls), mhpOf(u) - u.hp);
     if (h > 0) { u.hp += h; floatText(u.x, u.y, '+' + h, 'heal'); updTag(u); }

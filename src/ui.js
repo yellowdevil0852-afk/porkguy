@@ -451,6 +451,7 @@ function skillInfo(u, id) {
   return '<h5 class="q' + s.q + '">' + s.n + '<em>' + QN[s.q] + '</em></h5><p>' + s.d + '</p>' +
     rows.map(r => '<div class="sr">' + r + '</div>').join('');
 }
+let skillTipEl = null;
 function showSkillTip(u, id, el) {
   const t = $('skillTip');
   t.innerHTML = skillInfo(u, id);
@@ -458,8 +459,13 @@ function showSkillTip(u, id, el) {
   const r = el.getBoundingClientRect();
   t.style.left = Math.max(8, Math.min(uiW() - t.offsetWidth - 8, r.left / uiK() + r.width / uiK() / 2 - t.offsetWidth / 2)) + 'px';
   t.style.top = (r.top / uiK() - t.offsetHeight - 10) + 'px';
+  skillTipEl = el;
 }
-const hideSkillTip = () => $('skillTip').classList.add('hide');
+const hideSkillTip = () => { $('skillTip').classList.add('hide'); skillTipEl = null; };
+// 保險：技能列常常在滑鼠沒動的情況下整批重畫（例如點技能切換模式），舊按鈕被換掉
+// 收不到 pointerleave、新按鈕也收不到 pointerenter，介紹框就會卡住擋畫面。
+// 定時確認滑鼠是不是真的還壓在那個按鈕上，不是了就自己收掉。
+setInterval(() => { if (skillTipEl && !skillTipEl.matches(':hover')) hideSkillTip(); }, 400);
 
 function closeSkillBar() { skillMode = null; $('skills').classList.add('hide'); }
 
@@ -865,11 +871,10 @@ function renderGearList(side) {
     const d = document.createElement('div');
     d.className = 'item r' + it.r;
     d.draggable = true;
-    const af = it.affix ? AFFIX.find(x => x.id === it.affix) : null;
     const only = useHint(it);
     d.innerHTML = `<div class="in">${itemName(it)}
         <span class="sl">${RARITY[it.r].n} · ${SLOT_N[it.slot]}${only ? ' · ' + only : ''}</span></div>
-      <div class="is">${itemStats(it)}${af ? '　<em>' + af.d + '</em>' : ''}</div>
+      <div class="is">${itemStats(it)}${it.affix ? '　<em>' + affixDesc(it) + '</em>' : ''}</div>
       <button class="dis" title="分解成裝備精球">分解</button>`;
     d.querySelector('.dis').onclick = ev => { ev.stopPropagation(); doScrap(side, it.iid); };
     d.addEventListener('dragstart', ev => {

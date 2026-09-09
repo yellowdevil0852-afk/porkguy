@@ -144,13 +144,17 @@ const RARITY = [
   { n: '史詩', col: '#c07dff', mult: 2.0 },
   { n: '傳說', col: '#e8c168', mult: 2.5 }
 ];
+// 詞綴數值按品質分級，val 用品質 index（RARITY 的 1~4，0 普通不會抽到詞綴）
+// 去查，null 代表這個品質抽不到這條詞綴（first/swift 只有史詩／傳說才有）。
+// slot 限制：weapon 只在武器、armor 只在防具、any 三個部位都能出——
+// 飾品另外特殊：不管這裡寫什麼，飾品都能抽到全部 6 種（見 rollItem）。
 const AFFIX = [
-  { id: 'vamp', n: '吸血', d: '造成傷害時回復 30%' },
-  { id: 'rend', n: '破甲', d: '無視目標一半的防禦' },
-  { id: 'first', n: '先制', d: '主動攻擊時不會被反擊' },
-  { id: 'thorn', n: '反傷', d: '被近戰攻擊時反彈 25% 傷害' },
-  { id: 'swift', n: '疾風', d: '移動力 +2' },
-  { id: 'guard', n: '守護', d: '受到的傷害 −2' }
+  { id: 'vamp',  n: '吸血', slot: 'weapon', d: '造成傷害時回復傷害的 ', pct: 1, val: [null, 0.02, 0.04, 0.06, 0.10] },
+  { id: 'rend',  n: '破甲', slot: 'weapon', d: '無視目標防禦的 ',       pct: 1, val: [null, 0.05, 0.10, 0.15, 0.20] },
+  { id: 'first', n: '先制', slot: 'weapon', d: '主動攻擊時不會被反擊', val: [null, null, null, 1, 1] },
+  { id: 'thorn', n: '反傷', slot: 'armor',  d: '被近戰攻擊時反彈傷害的 ', pct: 1, val: [null, 0.10, 0.15, 0.20, 0.30] },
+  { id: 'guard', n: '守護', slot: 'armor',  d: '受到的傷害減少 ',      val: [null, 2, 4, 6, 10] },
+  { id: 'swift', n: '疾風', slot: 'any',    d: '移動力 +',            val: [null, null, null, 1, 2] }
 ];
 const GEAR = {
   weapon: [
