@@ -466,7 +466,11 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
 #arenaFxTxt{position:relative;font-size:56px;font-weight:800;letter-spacing:10px;color:var(--gold);
   text-shadow:0 4px 30px #000,0 0 70px currentColor;white-space:nowrap;
   transform:scale(.3);opacity:0;will-change:transform,opacity}
-#arenaFxTxt.grown{animation:arenaSway 2.1s ease-in-out infinite}
+/* 基礎規則的 opacity:0 是給進場動畫開始前那一瞬間用的；.grown 只有動
+   transform（搖晃），沒補 opacity:1 的話，補間結束清掉 inline 樣式的
+   那一刻就會整個打回基礎規則的 opacity:0，變成「才剛出現就直接消失、
+   搖晃動畫全程都是透明的」。 */
+#arenaFxTxt.grown{animation:arenaSway 2.1s ease-in-out infinite;opacity:1}
 /* 2 秒跟灰色背景退場的補間同一個長度，兩個要同時消失完，不是背景先淡完字才跟著跑 */
 #arenaFxTxt.leaving{transition:transform 2s ease-in,opacity 2s ease-in;
   transform:translateX(-60vw) rotate(-8deg);opacity:0}

@@ -145,40 +145,46 @@ function road(from, to) {
   }
 }
 
-// 每種地圖大小各自配置四圈的營地數量，數字是照「地圖越大，怪物群跟著等比例變多」
-// 抓出來的，不是精算——營地數 × 每圈的隊伍人數（tier1=3、其他=4）大概對得上
-// 使用者要的總數量級，沒有到小數點對齊，也刻意不加重試機制去湊精確值：
-// 密度太高硬要湊滿會逼營地擠壓成好幾圈同心圓的不自然排列，數量差一點比較好看。
-const CAMP_RING_N = {
-  16: [4, 2, 2, 2],
-  32: [8, 4, 4, 4],
-  64: [30, 14, 14, 14],
-  96: [64, 32, 32, 32],
-  128: [118, 56, 56, 56]
-};
-// 怪物營地：以王座為圓心一圈一圈排，每圈的點數是偶數 → 自然 180° 對稱。
-// 半徑由外而內對到 tier1～tier4，tier4 貼著王座本體，是滿等的最終守衛。
+// 怪物營地：改成「網格抖動」撒點——把地圖切成一格一格的方塊，每格裡挑一個
+// 隨機位置當候選點，等級（tier）不是看「你在哪一圈」，是看候選點離王座的
+// 距離落在哪個級距。這樣完全沒有固定半徑或固定角度，視覺上不會有任何
+// 圓弧或放射狀的規律，同時還是「越靠近王座等級越高」。
+// 只在半張地圖跑，另一半直接鏡射，跟 road()/placeRocks() 同一套做法。
+const CAMP_TIER_FRAC = [0.85, 0.5, 0.25, 0];  // 距離比例門檻，由外而內對到 tier1～tier4
+// 格子邊長依地圖大小查表，數字是實測調出來的——不是單純跟 W 成正比，
+// 小地圖（16）如果套跟大地圖一樣的比例，格子會小到密度爆炸。
+const CAMP_CELL_BY_SIZE = { 16: 5, 32: 8, 64: 8, 96: 8, 128: 9 };
 function placeCamps() {
   CAMPS = [];
-  const c = THRONE[0];
-  const n = CAMP_RING_N[W] || CAMP_RING_N[32];
-  const rings = [
-    { r: W * 0.44, n: n[0], tier: 1 },
-    { r: W * 0.31, n: n[1], tier: 2 },
-    { r: W * 0.17, n: n[2], tier: 3 },
-    { r: W * 0.08, n: n[3], tier: 4 }
-  ];
-  for (const g of rings) {
-    for (let i = 0; i < g.n; i++) {
-      const a = (i / g.n) * Math.PI * 2 + g.tier * 0.6;
-      const x = Math.round(c + Math.cos(a) * g.r), y = Math.round(c + Math.sin(a) * g.r);
+  const cell = CAMP_CELL_BY_SIZE[W] || Math.max(2, Math.round(W / 14));
+  const half = Math.ceil(W / 2);
+  const halfDiag = Math.sqrt(2) * (W / 2);    // 中心到角落的距離，拿來把距離換算成 0~1 的比例
+  for (let gy = 0; gy < H; gy += cell) {
+    for (let gx = 0; gx < half; gx += cell) {
+      const x = Math.min(W - 1, gx + Math.floor(rng() * cell));
+      const y = Math.min(H - 1, gy + Math.floor(rng() * cell));
       if (!inBoard(x, y)) continue;
       const t = MAP[y][x];
       if (t === 'W' || t === 'T' || t === 'C' || t === 'K') continue;
-      if (CAMPS.some(p => Math.abs(p.x - x) + Math.abs(p.y - y) < 3)) continue;
       if (CAMP.some(p => Math.abs(p[0] - x) + Math.abs(p[1] - y) < 4)) continue;
+      if (CAMPS.some(p => Math.abs(p.x - x) + Math.abs(p.y - y) < 3)) continue;
+
+      const dx0 = x - THRONE[0], dy0 = y - THRONE[1];
+      const frac = Math.sqrt(dx0 * dx0 + dy0 * dy0) / halfDiag;
+      let tier = 1;
+      for (let i = 0; i < CAMP_TIER_FRAC.length; i++) if (frac >= CAMP_TIER_FRAC[i]) { tier = i + 1; break; }
       const d = Math.abs(x - THRONE[0]) + Math.abs(y - THRONE[1]);
-      CAMPS.push({ id: CAMPS.length, x, y, tier: g.tier, revive: d > NO_REVIVE_R });
+      CAMPS.push({ id: CAMPS.length, x, y, tier, revive: d > NO_REVIVE_R });
+
+      // 鏡射到地圖另一半，跟正排一樣要過同一輪檢查（正中央附近可能跟自己重疊，跳過）
+      const mx = W - 1 - x, my = H - 1 - y;
+      if (mx === x && my === y) continue;
+      const mt = MAP[my] ? MAP[my][mx] : undefined;
+      if (mt === undefined || mt === 'W' || mt === 'T' || mt === 'C' || mt === 'K') continue;
+      if (CAMP.some(p => Math.abs(p[0] - mx) + Math.abs(p[1] - my) < 4)) continue;
+      if (CAMPS.some(p => Math.abs(p.x - mx) + Math.abs(p.y - my) < 3)) continue;
+      const md = Math.abs(mx - THRONE[0]) + Math.abs(my - THRONE[1]);
+      CAMPS.push({ id: CAMPS.length, x: mx, y: my, tier, revive: md > NO_REVIVE_R });
     }
   }
 }
