@@ -95,9 +95,38 @@ function genMap(seed) {
   road(CAMP[0], [CAMP[0][0] + spur, CAMP[0][1] - Math.round(spur / 3)]);
   road(CAMP[1], [CAMP[1][0] - spur, CAMP[1][1] + Math.round(spur / 3)]);
 
+  placeRocks();
   placeCamps();
   placeChests();
   TRAPS = [];
+}
+
+// 主地圖的石頭：純障礙物，不可通行、擋遠程/魔法視線、沒有任何加成，
+// 跟競技場那套完全同一種地形（見 data.js 的 TER.K），只是這裡地圖比較大、
+// 用主地圖自己的 rng（不是戰鬥用的 grng）灑幾叢，兩邊算出來的地圖才會一致。
+// 只灑在還是平原的格子上，避開營地/王座/道路/水——freeNear() 本來就會跳過
+// cost>90 的地形，所以怪物、英雄、寶箱都不會生成到石頭上，這裡不用額外處理。
+function placeRocks() {
+  const near = (x, y, cx, cy, r) => Math.abs(x - cx) + Math.abs(y - cy) <= r;
+  const nearSpawn = (x, y) => CAMP.some(([cx, cy]) => near(x, y, cx, cy, 3));
+  const clusters = Math.max(3, Math.round(W * H / 120));
+  for (let i = 0; i < clusters; i++) {
+    const x = 2 + Math.floor(rng() * (W - 4)), y = 2 + Math.floor(rng() * (H - 4));
+    if (nearSpawn(x, y) || MAP[y][x] !== 'P') continue;
+    const mx = W - 1 - x, my = H - 1 - y;
+    MAP[y][x] = 'K';
+    if (inBoard(mx, my) && MAP[my][mx] === 'P') MAP[my][mx] = 'K';
+    // 偶爾黏一格，看起來像一叢石頭而不是孤零零一格（跟競技場那套一樣的手法）
+    if (rng() < 0.4) {
+      const [dx, dy] = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(rng() * 4)];
+      const nx = x + dx, ny = y + dy;
+      if (inBoard(nx, ny) && !nearSpawn(nx, ny) && MAP[ny][nx] === 'P') {
+        MAP[ny][nx] = 'K';
+        const nmx = W - 1 - nx, nmy = H - 1 - ny;
+        if (inBoard(nmx, nmy) && MAP[nmy][nmx] === 'P') MAP[nmy][nmx] = 'K';
+      }
+    }
+  }
 }
 
 // 用貪心 + 抖動畫一條路，會避開水
@@ -135,7 +164,7 @@ function placeCamps() {
       const x = Math.round(c + Math.cos(a) * g.r), y = Math.round(c + Math.sin(a) * g.r);
       if (!inBoard(x, y)) continue;
       const t = MAP[y][x];
-      if (t === 'W' || t === 'T' || t === 'C') continue;
+      if (t === 'W' || t === 'T' || t === 'C' || t === 'K') continue;
       if (CAMPS.some(p => Math.abs(p.x - x) + Math.abs(p.y - y) < 3)) continue;
       if (CAMP.some(p => Math.abs(p[0] - x) + Math.abs(p[1] - y) < 4)) continue;
       const d = Math.abs(x - THRONE[0]) + Math.abs(y - THRONE[1]);
@@ -148,7 +177,7 @@ function placeChests() {
   CHESTS = [];
   const add = (x, y, gold) => {
     if (!inBoard(x, y)) return;
-    if (MAP[y][x] === 'W' || MAP[y][x] === 'T' || MAP[y][x] === 'C') return;
+    if (MAP[y][x] === 'W' || MAP[y][x] === 'T' || MAP[y][x] === 'C' || MAP[y][x] === 'K') return;
     if (CHESTS.some(c => c.x === x && c.y === y)) return;
     CHESTS.push({ x, y, gold, opened: false });
   };

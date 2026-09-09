@@ -129,6 +129,12 @@ function clearConnTimer() { if (connTimer) { clearTimeout(connTimer); connTimer 
 // 拉長到 25 秒給 TURN 多一點時間，不要在它其實還在忙的時候就提前判死刑。
 const CONN_TIMEOUT = 25000;
 
+// 逾時訊息分兩種階段，方便使用者回報時能講出「卡在哪一步」，不用開瀏覽器
+// 主控台也能大概判斷問題出在哪：
+//   階段 1：自己的 Peer 連不上 PeerJS 雲端信令伺服器（基本對外連線問題，
+//           跟 WebRTC/TURN 完全無關，通常是防火牆擋掉那個網域或 WebSocket）。
+//   階段 2：信令有連上（雙方都找得到對方），但 P2P／TURN 中繼交握一直沒完成——
+//           這一步才是 STUN/TURN、對稱式 NAT 那些在起作用。
 function startHost() {
   destroyPeer();
   const code = mkCode();
@@ -136,8 +142,9 @@ function startHost() {
   $('mWait').classList.remove('hide');
   $('roomCode').textContent = code;
   net.host = true;
+  let signaled = false;
   net.peer = new Peer(PREFIX + code, { debug: 0, config: ICE_CONFIG });
-  net.peer.on('open', () => { $('mWaitNote').textContent = '房間已開啟，等待對手加入…'; });
+  net.peer.on('open', () => { signaled = true; $('mWaitNote').textContent = '房間已開啟，等待對手加入…'; });
   net.peer.on('connection', c => {
     clearConnTimer();
     const fresh = !$('menu').classList.contains('hide');
@@ -150,7 +157,9 @@ function startHost() {
       ? '房號重複，請再按一次建立房間' : '無法連上信令伺服器：' + e.type;
   });
   connTimer = setTimeout(() => {
-    $('mWaitNote').textContent = '一直連不上信令伺服器，檢查網路後重新建立房間';
+    $('mWaitNote').textContent = signaled
+      ? '房間開著但對手一直連不進來（階段 2：P2P 交握卡住），請對方換個網路再試'
+      : '一直連不上信令伺服器（階段 1：對外連線問題），檢查網路後重新建立房間';
   }, CONN_TIMEOUT);
 }
 
@@ -160,8 +169,10 @@ function startJoin() {
   destroyPeer();
   $('mNetNote').textContent = '連線中…';
   net.host = false;
+  let signaled = false;
   net.peer = new Peer({ debug: 0, config: ICE_CONFIG });
   net.peer.on('open', () => {
+    signaled = true;
     const c = net.peer.connect(PREFIX + code, { reliable: true });
     hookConn(c);
     c.on('open', () => { clearConnTimer(); mode = 'online'; myTeam = 1; guestPickFlow(); });
@@ -172,8 +183,11 @@ function startJoin() {
       ? '找不到這個房間，確認房號是否正確' : '連線失敗：' + e.type;
   });
   connTimer = setTimeout(() => {
-    $('mNetNote').textContent = '連線逾時 —— 雙方其中一邊的網路可能擋掉了 WebRTC。' +
-      '換一個網路（例如手機熱點）試試，或請房主重新建立房間。';
+    $('mNetNote').textContent = signaled
+      ? '連線逾時（階段 2：P2P／中繼交握卡住）—— 雙方其中一邊的網路可能擋掉了 ' +
+        'WebRTC。換一個網路（例如手機熱點）試試，或請房主重新建立房間。'
+      : '連線逾時（階段 1：連不上信令伺服器）—— 這一步失敗通常是網路本身擋掉 ' +
+        '了對外連線，換一個網路試試。';
     destroyPeer();
   }, CONN_TIMEOUT);
 }

@@ -788,7 +788,7 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
         <tr><td>沼澤</td><td>3</td><td>防禦 −1，踏進去移動就結束</td></tr>
         <tr><td>深水</td><td colspan="2">不可通行</td></tr>
         <tr><td>王座</td><td>2</td><td>防禦 +2、勝利點</td></tr>
-        <tr><td>石頭</td><td colspan="2">不可通行、擋遠程和魔法視線（競技場限定）</td></tr>
+        <tr><td>石頭</td><td colspan="2">不可通行、擋遠程和魔法視線，主地圖和競技場都會出現</td></tr>
       </table>
 
       <h3>成長與裝備</h3>
@@ -5724,9 +5724,38 @@ function genMap(seed) {
   road(CAMP[0], [CAMP[0][0] + spur, CAMP[0][1] - Math.round(spur / 3)]);
   road(CAMP[1], [CAMP[1][0] - spur, CAMP[1][1] + Math.round(spur / 3)]);
 
+  placeRocks();
   placeCamps();
   placeChests();
   TRAPS = [];
+}
+
+// 主地圖的石頭：純障礙物，不可通行、擋遠程/魔法視線、沒有任何加成，
+// 跟競技場那套完全同一種地形（見 data.js 的 TER.K），只是這裡地圖比較大、
+// 用主地圖自己的 rng（不是戰鬥用的 grng）灑幾叢，兩邊算出來的地圖才會一致。
+// 只灑在還是平原的格子上，避開營地/王座/道路/水——freeNear() 本來就會跳過
+// cost>90 的地形，所以怪物、英雄、寶箱都不會生成到石頭上，這裡不用額外處理。
+function placeRocks() {
+  const near = (x, y, cx, cy, r) => Math.abs(x - cx) + Math.abs(y - cy) <= r;
+  const nearSpawn = (x, y) => CAMP.some(([cx, cy]) => near(x, y, cx, cy, 3));
+  const clusters = Math.max(3, Math.round(W * H / 120));
+  for (let i = 0; i < clusters; i++) {
+    const x = 2 + Math.floor(rng() * (W - 4)), y = 2 + Math.floor(rng() * (H - 4));
+    if (nearSpawn(x, y) || MAP[y][x] !== 'P') continue;
+    const mx = W - 1 - x, my = H - 1 - y;
+    MAP[y][x] = 'K';
+    if (inBoard(mx, my) && MAP[my][mx] === 'P') MAP[my][mx] = 'K';
+    // 偶爾黏一格，看起來像一叢石頭而不是孤零零一格（跟競技場那套一樣的手法）
+    if (rng() < 0.4) {
+      const [dx, dy] = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(rng() * 4)];
+      const nx = x + dx, ny = y + dy;
+      if (inBoard(nx, ny) && !nearSpawn(nx, ny) && MAP[ny][nx] === 'P') {
+        MAP[ny][nx] = 'K';
+        const nmx = W - 1 - nx, nmy = H - 1 - ny;
+        if (inBoard(nmx, nmy) && MAP[nmy][nmx] === 'P') MAP[nmy][nmx] = 'K';
+      }
+    }
+  }
 }
 
 // 用貪心 + 抖動畫一條路，會避開水
@@ -5764,7 +5793,7 @@ function placeCamps() {
       const x = Math.round(c + Math.cos(a) * g.r), y = Math.round(c + Math.sin(a) * g.r);
       if (!inBoard(x, y)) continue;
       const t = MAP[y][x];
-      if (t === 'W' || t === 'T' || t === 'C') continue;
+      if (t === 'W' || t === 'T' || t === 'C' || t === 'K') continue;
       if (CAMPS.some(p => Math.abs(p.x - x) + Math.abs(p.y - y) < 3)) continue;
       if (CAMP.some(p => Math.abs(p[0] - x) + Math.abs(p[1] - y) < 4)) continue;
       const d = Math.abs(x - THRONE[0]) + Math.abs(y - THRONE[1]);
@@ -5777,7 +5806,7 @@ function placeChests() {
   CHESTS = [];
   const add = (x, y, gold) => {
     if (!inBoard(x, y)) return;
-    if (MAP[y][x] === 'W' || MAP[y][x] === 'T' || MAP[y][x] === 'C') return;
+    if (MAP[y][x] === 'W' || MAP[y][x] === 'T' || MAP[y][x] === 'C' || MAP[y][x] === 'K') return;
     if (CHESTS.some(c => c.x === x && c.y === y)) return;
     CHESTS.push({ x, y, gold, opened: false });
   };
@@ -8813,7 +8842,7 @@ function projectTags() {
 const respTags = [];
 function refreshRespawnTags() {
   const box = $('tags');
-  const list = G.units.filter(u => !u.alive && u.down > 0);
+  const list = G.units.filter(u => !u.alive && u.down > 0 && !u.paused);
   while (respTags.length > list.length) respTags.pop().remove();
   while (respTags.length < list.length) {
     const d = document.createElement('div');
@@ -8829,7 +8858,7 @@ function refreshRespawnTags() {
 }
 function drawRespawnTags() {
   if (!respTags.length) return;
-  const list = G.units.filter(u => !u.alive && u.down > 0);
+  const list = G.units.filter(u => !u.alive && u.down > 0 && !u.paused);
   list.forEach((u, i) => {
     const el = respTags[i];
     if (!el) return;
@@ -10539,6 +10568,12 @@ function clearConnTimer() { if (connTimer) { clearTimeout(connTimer); connTimer 
 // 拉長到 25 秒給 TURN 多一點時間，不要在它其實還在忙的時候就提前判死刑。
 const CONN_TIMEOUT = 25000;
 
+// 逾時訊息分兩種階段，方便使用者回報時能講出「卡在哪一步」，不用開瀏覽器
+// 主控台也能大概判斷問題出在哪：
+//   階段 1：自己的 Peer 連不上 PeerJS 雲端信令伺服器（基本對外連線問題，
+//           跟 WebRTC/TURN 完全無關，通常是防火牆擋掉那個網域或 WebSocket）。
+//   階段 2：信令有連上（雙方都找得到對方），但 P2P／TURN 中繼交握一直沒完成——
+//           這一步才是 STUN/TURN、對稱式 NAT 那些在起作用。
 function startHost() {
   destroyPeer();
   const code = mkCode();
@@ -10546,8 +10581,9 @@ function startHost() {
   $('mWait').classList.remove('hide');
   $('roomCode').textContent = code;
   net.host = true;
+  let signaled = false;
   net.peer = new Peer(PREFIX + code, { debug: 0, config: ICE_CONFIG });
-  net.peer.on('open', () => { $('mWaitNote').textContent = '房間已開啟，等待對手加入…'; });
+  net.peer.on('open', () => { signaled = true; $('mWaitNote').textContent = '房間已開啟，等待對手加入…'; });
   net.peer.on('connection', c => {
     clearConnTimer();
     const fresh = !$('menu').classList.contains('hide');
@@ -10560,7 +10596,9 @@ function startHost() {
       ? '房號重複，請再按一次建立房間' : '無法連上信令伺服器：' + e.type;
   });
   connTimer = setTimeout(() => {
-    $('mWaitNote').textContent = '一直連不上信令伺服器，檢查網路後重新建立房間';
+    $('mWaitNote').textContent = signaled
+      ? '房間開著但對手一直連不進來（階段 2：P2P 交握卡住），請對方換個網路再試'
+      : '一直連不上信令伺服器（階段 1：對外連線問題），檢查網路後重新建立房間';
   }, CONN_TIMEOUT);
 }
 
@@ -10570,8 +10608,10 @@ function startJoin() {
   destroyPeer();
   $('mNetNote').textContent = '連線中…';
   net.host = false;
+  let signaled = false;
   net.peer = new Peer({ debug: 0, config: ICE_CONFIG });
   net.peer.on('open', () => {
+    signaled = true;
     const c = net.peer.connect(PREFIX + code, { reliable: true });
     hookConn(c);
     c.on('open', () => { clearConnTimer(); mode = 'online'; myTeam = 1; guestPickFlow(); });
@@ -10582,8 +10622,11 @@ function startJoin() {
       ? '找不到這個房間，確認房號是否正確' : '連線失敗：' + e.type;
   });
   connTimer = setTimeout(() => {
-    $('mNetNote').textContent = '連線逾時 —— 雙方其中一邊的網路可能擋掉了 WebRTC。' +
-      '換一個網路（例如手機熱點）試試，或請房主重新建立房間。';
+    $('mNetNote').textContent = signaled
+      ? '連線逾時（階段 2：P2P／中繼交握卡住）—— 雙方其中一邊的網路可能擋掉了 ' +
+        'WebRTC。換一個網路（例如手機熱點）試試，或請房主重新建立房間。'
+      : '連線逾時（階段 1：連不上信令伺服器）—— 這一步失敗通常是網路本身擋掉 ' +
+        '了對外連線，換一個網路試試。';
     destroyPeer();
   }, CONN_TIMEOUT);
 }

@@ -57,7 +57,7 @@ function projectTags() {
 const respTags = [];
 function refreshRespawnTags() {
   const box = $('tags');
-  const list = G.units.filter(u => !u.alive && u.down > 0);
+  const list = G.units.filter(u => !u.alive && u.down > 0 && !u.paused);
   while (respTags.length > list.length) respTags.pop().remove();
   while (respTags.length < list.length) {
     const d = document.createElement('div');
@@ -73,7 +73,7 @@ function refreshRespawnTags() {
 }
 function drawRespawnTags() {
   if (!respTags.length) return;
-  const list = G.units.filter(u => !u.alive && u.down > 0);
+  const list = G.units.filter(u => !u.alive && u.down > 0 && !u.paused);
   list.forEach((u, i) => {
     const el = respTags[i];
     if (!el) return;
