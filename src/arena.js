@@ -240,8 +240,9 @@ async function pickupArenaBuff(u) {
 
 // 進競技場的轉場動畫：獨立一套，不走 showBanner()「飛到小面板」那套邏輯——
 // 進競技場是雙方共同的大事件，值得比一般換邊回合更隆重一點。
-// 節奏：灰階模糊淡入＋字放大（0.7 秒）→ 字左右搖晃像船一樣，維持到第 5 秒 →
-// 灰色背景從畫面邊緣退回中心（2 秒），退到一半時字滑出左邊消失。
+// 節奏：灰階模糊淡入＋字放大（0.7 秒）→ 字左右搖晃像船一樣，維持到第 3 秒 →
+// 灰色背景從畫面邊緣退回中心（2 秒），文字跟背景同時開始收、同時消失完，
+// 不是背景先開始退、字晚一點才跟——兩個要在同一刻結束。
 // 不 await 呼叫端——這純粹是疊在畫面上的動畫，不該卡住地圖/鏡頭的真正切換。
 async function arenaBanner() {
   const el = $('arenaFx'), txt = $('arenaFxTxt');
@@ -270,10 +271,10 @@ async function arenaBanner() {
   txt.style.opacity = '';
   txt.classList.add('grown');
 
-  await wait(5000 - 700);
+  await wait(3000 - 700);
 
   txt.classList.remove('grown');
-  setTimeout(() => txt.classList.add('leaving'), 1000);
+  txt.classList.add('leaving');   // 跟灰色背景同時開始收，兩個一起在退場動畫跑完的那一刻消失
   await tween(2000, k => {
     const e = k * k;   // ease-in：退場一開始慢，後面加速收尾
     el.style.setProperty('--r', (120 * (1 - e)) + '%');

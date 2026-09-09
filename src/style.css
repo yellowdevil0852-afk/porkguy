@@ -467,7 +467,8 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
   text-shadow:0 4px 30px #000,0 0 70px currentColor;white-space:nowrap;
   transform:scale(.3);opacity:0;will-change:transform,opacity}
 #arenaFxTxt.grown{animation:arenaSway 2.1s ease-in-out infinite}
-#arenaFxTxt.leaving{transition:transform 1s ease-in,opacity 1s ease-in;
+/* 2 秒跟灰色背景退場的補間同一個長度，兩個要同時消失完，不是背景先淡完字才跟著跑 */
+#arenaFxTxt.leaving{transition:transform 2s ease-in,opacity 2s ease-in;
   transform:translateX(-60vw) rotate(-8deg);opacity:0}
 @keyframes arenaSway{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
 

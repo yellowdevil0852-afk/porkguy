@@ -151,9 +151,9 @@ function road(from, to) {
 const CAMP_RING_N = {
   16: [4, 2, 2, 2],
   32: [8, 4, 4, 4],
-  64: [16, 8, 8, 8],
-  96: [24, 12, 12, 12],
-  128: [32, 16, 16, 16]
+  64: [30, 14, 14, 14],
+  96: [64, 32, 32, 32],
+  128: [118, 56, 56, 56]
 };
 // 怪物營地：以王座為圓心一圈一圈排，每圈的點數是偶數 → 自然 180° 對稱。
 // 半徑由外而內對到 tier1～tier4，tier4 貼著王座本體，是滿等的最終守衛。
@@ -167,17 +167,33 @@ function placeCamps() {
     { r: W * 0.17, n: n[2], tier: 3 },
     { r: W * 0.08, n: n[3], tier: 4 }
   ];
+  const fits = (x, y) => {
+    if (!inBoard(x, y)) return false;
+    const t = MAP[y][x];
+    if (t === 'W' || t === 'T' || t === 'C' || t === 'K') return false;
+    if (CAMPS.some(p => Math.abs(p.x - x) + Math.abs(p.y - y) < 2)) return false;
+    if (CAMP.some(p => Math.abs(p[0] - x) + Math.abs(p[1] - y) < 4)) return false;
+    return true;
+  };
+  // 每圈角度算出來的第一個落點如果不行（撞到別的營地、地形不對），
+  // 沿著同一個角度往外/往內挪幾格再試——半徑微調不會破壞鏡射對稱
+  // （同一個角度的兩個鏡射點會拿到一樣的偏移量），角度越密（n 越大）
+  // 越常撞到，靠這個重試機制才不會地圖越大、怪物數量反而落差越大。
+  const RETRY_DR = [0, 3, -3, 6, -6, 9, -9];
   for (const g of rings) {
     for (let i = 0; i < g.n; i++) {
       const a = (i / g.n) * Math.PI * 2 + g.tier * 0.6;
-      const x = Math.round(c + Math.cos(a) * g.r), y = Math.round(c + Math.sin(a) * g.r);
-      if (!inBoard(x, y)) continue;
-      const t = MAP[y][x];
-      if (t === 'W' || t === 'T' || t === 'C' || t === 'K') continue;
-      if (CAMPS.some(p => Math.abs(p.x - x) + Math.abs(p.y - y) < 3)) continue;
-      if (CAMP.some(p => Math.abs(p[0] - x) + Math.abs(p[1] - y) < 4)) continue;
-      const d = Math.abs(x - THRONE[0]) + Math.abs(y - THRONE[1]);
-      CAMPS.push({ id: CAMPS.length, x, y, tier: g.tier, revive: d > NO_REVIVE_R });
+      let placed = false;
+      for (const dr of RETRY_DR) {
+        const r = Math.max(2, g.r + dr);
+        const x = Math.round(c + Math.cos(a) * r), y = Math.round(c + Math.sin(a) * r);
+        if (!fits(x, y)) continue;
+        const d = Math.abs(x - THRONE[0]) + Math.abs(y - THRONE[1]);
+        CAMPS.push({ id: CAMPS.length, x, y, tier: g.tier, revive: d > NO_REVIVE_R });
+        placed = true;
+        break;
+      }
+      if (!placed) continue;   // 試完還是放不下就放棄這個位置，總數會比要求的略少
     }
   }
 }
