@@ -77,7 +77,9 @@ function drawRespawnTags() {
   list.forEach((u, i) => {
     const el = respTags[i];
     if (!el) return;
-    const s = u.spawnAt || u.home;
+    // 倒下的英雄常常沒有 spawnAt 也沒有 home，退回自家營地座標；再沒有就跳過不畫
+    const s = u.spawnAt || u.home || (u.side < 2 ? CAMP[u.side] : null);
+    if (!s || !inBoard(s[0], s[1])) { el.style.display = 'none'; return; }
     projV.set(wx(s[0]), ter(s[0], s[1]).h + 0.4, wz(s[1])).project(camera);
     if (projV.z > 1 || Math.abs(projV.x) > 1.1 || Math.abs(projV.y) > 1.1) { el.style.display = 'none'; return; }
     el.style.display = '';
@@ -89,10 +91,10 @@ function drawRespawnTags() {
 // 施放技能時，滑鼠指到的目標上會出現一個準心：傷害技能紅色、增益技能綠色
 // 技能怎麼選目標：自己身上／敵方單位／友方單位／空地或格子
 const K_SELF = ['fan', 'cross', 'around', 'retreat', 'refreshSelf', 'aura', 'buffSelf', 'buffAround', 'domain', 'raise'];
-const K_ENEMY = ['single', 'multi'];
+const K_ENEMY = ['single', 'multi', 'rand'];
 const K_ALLY = ['heal', 'shield', 'buffAlly', 'refreshAlly'];
 const K_EMPTY = ['teleport', 'trap', 'trapN'];
-const HARM = ['single', 'multi', 'fan', 'cross', 'around', 'line', 'aoe', 'pick', 'wave', 'charge', 'delayed', 'trap', 'trapN'];
+const HARM = ['single', 'multi', 'fan', 'cross', 'around', 'line', 'aoe', 'pick', 'wave', 'charge', 'delayed', 'trap', 'trapN', 'rand', 'field'];
 const skAoeR = s => (s.k === 'around' || s.k === 'fan' || s.k === 'cross' ? 1 : s.r || 0);
 function drawReticle() {
   const el = $('reticle');
@@ -419,7 +421,7 @@ function buildSkillBar(u) {
     b.onpointerleave = hideSkillTip;
     // 用 class 而不是 disabled：disabled 的按鈕在瀏覽器裡收不到滑鼠事件，
     // 那樣冷卻中或不是自己回合的時候就看不到技能說明了
-    const off = cd > 0 || u.acted || !canAct() || !canSkillU(u);
+    const off = cd > 0 || u.acted || !canAct() || !canSkillU(u) || (s.noAfterMove && u.moved);
     if (off) b.classList.add('off');
     b.onclick = () => {
       if (off) return;
@@ -907,7 +909,8 @@ const K_LABEL = {
   line: '直線', aoe: '範圍', pick: '散射', wave: '波狀', charge: '衝鋒', delayed: '延遲',
   teleport: '位移', retreat: '撤退', refreshSelf: '再動', refreshAlly: '再動', trap: '陷阱',
   trapN: '陷阱', heal: '治療', healAoe: '群療', aura: '光環', shield: '護盾',
-  buffSelf: '自強', buffAlly: '增益', buffAround: '團隊', domain: '領域', raise: '復活'
+  buffSelf: '自強', buffAlly: '增益', buffAround: '團隊', domain: '領域', raise: '復活',
+  frontbox: '範圍', rand: '亂射', field: '地塊'
 };
 const skClsTag = id => {
   const s = SK[id];

@@ -544,6 +544,29 @@ function refreshPending() {
   }
 }
 
+// 持續地塊（烈焰風暴／死命毒霧／神聖領域）：在地上鋪一層半透明色塊
+let fieldGroup = null;
+function refreshFields() {
+  if (fieldGroup) fxGroup.remove(fieldGroup);
+  fieldGroup = new THREE.Group();
+  fxGroup.add(fieldGroup);
+  for (const p of (typeof FIELDS !== 'undefined' ? FIELDS : [])) {
+    const col = p.heal ? 0x8be6a0 : p.fx === 'ice' ? 0x8fd8ff : 0xff7a20;
+    for (let dx = -p.r; dx <= p.r; dx++) for (let dy = -p.r; dy <= p.r; dy++) {
+      const x = p.x + dx, y = p.y + dy;
+      if (!inBoard(x, y)) continue;
+      const m = new THREE.Mesh(
+        new THREE.PlaneGeometry(TILE * 0.92, TILE * 0.92),
+        new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.22,
+          depthWrite: false, fog: false })
+      );
+      m.rotation.x = -Math.PI / 2;
+      m.position.set(wx(x), ter(x, y).h + 0.04, wz(y));
+      fieldGroup.add(m);
+    }
+  }
+}
+
 // 競技場的一次性增益地塊：金色是力量增幅、紫色是蓄力，撿走就從畫面上消失
 let arenaBuffGroup = null;
 function refreshArenaBuffTiles() {

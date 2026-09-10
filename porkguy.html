@@ -5492,135 +5492,140 @@ const SK = {
                 d:'生命歸零時保留 1 點並獲得無敵 1 回合，每場一次。' },
 
   /* ───────── 遊俠 ───────── */
-  rg_quick:   { n:'快射', q:0, c:'RG', k:'single', rng:0, pct:1.5, cd:2, freeMove:1, fx:'arrow',
-                d:'快速一箭，不消耗移動。' },
-  rg_pierce:  { n:'貫穿射擊', q:0, c:'RG', k:'line', rng:0, pct:0.9, len:3, cd:3, fx:'arrow',
-                d:'射穿一直線上的敵人。' },
-  rg_snare:   { n:'絆索', q:0, c:'RG', k:'trap', pct:1.1, cd:3, rng:3, fx:'trap',
-                d:'在空地放一個絆索，踩到會受傷並停下。' },
-  rg_double:  { n:'雙連射', q:1, c:'RG', k:'multi', pct:1.15, hits:2, cd:3, rng:0, fx:'arrow',
-                d:'對同一個目標連射兩箭。' },
-  rg_spread:  { n:'散射', q:1, c:'RG', k:'pick', pct:1.0, pick:3, r:1, cd:3, rng:0, fx:'arrow',
-                d:'一次射向目標附近最多三個敵人。' },
+  rg_quick:   { n:'連射', q:0, c:'RG', k:'multi', rng:0, pct:0.6, hits:2, cd:2, fx:'arrow',
+                d:'快速射出兩箭，對單體造成 60% × 2 傷害。' },
+  rg_pierce:  { n:'貫穿射擊', q:0, c:'RG', k:'line', rng:0, pct:0.6, len:3, cd:3, fx:'arrow',
+                d:'對直線 3 格內的敵人各造成 60% 傷害。' },
+  rg_snare:   { n:'後撤步', q:0, c:'RG', k:'single', rng:0, pct:0.8, cd:3, retreat:2, fx:'arrow',
+                d:'射出一箭 80% 傷害，然後往後退 2 格（無視地形消耗）。' },
+  rg_double:  { n:'蓄力箭', q:1, c:'RG', k:'single', pct:1.8, cd:3, rng:0, rooted:1, noAfterMove:1, fx:'arrow',
+                d:'犧牲本回合移動，對單體造成 180% 傷害（已移動則不能發動）。' },
+  rg_spread:  { n:'散射', q:1, c:'RG', k:'pick', pct:0.6, pick:3, r:1, cd:3, rng:0, fx:'arrow',
+                d:'對指定目標周圍一格內最多三個敵人各造成 60% 傷害。' },
   rg_wind:    { n:'疾風步', q:1, c:'RG', k:'passive', p:{ mov:1, forest:1 },
-                d:'移動 +1，穿越森林不加成移動消耗。' },
-  rg_focus:   { n:'鷹眼專注', q:2, c:'RG', k:'buffSelf', cd:4, fx:'buff',
-                self:[s('crit',0.6,2), s('atk',0.3,2)], d:'凝神，暴擊率與攻擊大幅提升。' },
-  rg_ap:      { n:'穿甲箭', q:2, c:'RG', k:'line', rng:0, pct:1.45, len:4, cd:4, ignoreTer:1, fx:'arrow',
-                d:'無視地形防禦的穿甲一箭。' },
-  rg_instinct:{ n:'獵人本能', q:2, c:'RG', k:'passive', p:{ firstNoCounter:1 },
-                d:'每回合第一次攻擊必定不會被反擊。' },
-  rg_poison:  { n:'毒箭', q:3, c:'RG', k:'single', rng:0, pct:2.5, cd:4, fx:'poison',
-                st:[s('poison',0.25,3)], d:'淬毒的一箭，持續掉血且治療減半。' },
-  rg_bramble: { n:'荊棘陷阱', q:3, c:'RG', k:'trapN', pct:1.85, n:3, cd:5, rng:3, fx:'trap',
-                st:[s('bleed',0.25,2)], d:'在目標周圍佈下三個荊棘陷阱。' },
-  rg_weak:    { n:'致命弱點', q:3, c:'RG', k:'passive', p:{ vsDebuff:0.3 },
-                d:'對身上有負面狀態的目標傷害 +30%。' },
-  rg_rain:    { n:'箭雨', q:4, c:'RG', k:'aoe', pct:2.0, r:1, cd:6, rng:4, fx:'rain',
-                st:[s('root',0,1)], d:'一輪箭雨落下，命中的敵人被釘在原地。' },
-  rg_mark:    { n:'死亡標記', q:4, c:'RG', k:'single', rng:0, pct:3.2, cd:6, fx:'mark',
-                st:[s('curse',0.3,2)], resetOnKill:1,
-                d:'標記獵物；若它在本回合內死亡，冷卻立刻重置。' },
-  rg_eye:     { n:'千里之瞳', q:4, c:'RG', k:'passive', p:{ rng:1, farNoCounter:3 },
-                d:'射程 +1（山地再 +1）；對 3 格外的目標永不被反擊。' },
+                d:'移動力 +1，穿越森林不消耗額外移動力。' },
+  rg_focus:   { n:'鷹眼專注', q:2, c:'RG', k:'single', rng:0, pct:1.0, cd:4, fx:'arrow',
+                self:[s('crit',0.2,2), s('atk',0.2,2)],
+                d:'100% 傷害，並使自身獲得銳利 +20% 與強化 +20%（2 回合）。' },
+  rg_ap:      { n:'穿甲箭', q:2, c:'RG', k:'line', rng:0, pct:1.0, len:4, cd:4, ignoreTer:1, armorPen:0.3, fx:'arrow',
+                d:'直線 4 格內各 100% 傷害，無視地形防禦與目標 30% 防禦。' },
+  rg_instinct:{ n:'專注', q:2, c:'RG', k:'passive', p:{ singleDmg:0.15 },
+                d:'造成的任何單體傷害 +15%。' },
+  rg_poison:  { n:'毒箭', q:3, c:'RG', k:'single', rng:0, pct:1.4, cd:4, fx:'poison',
+                st:[s('poison',0.2,3)], d:'140% 傷害並附加劇毒 20%（3 回合，治療減半）。' },
+  rg_bramble: { n:'蛛絲箭', q:3, c:'RG', k:'single', rng:0, pct:1.2, cd:4, fx:'arrow',
+                st:[s('root',0,1)], aoeSt:[{ id:'slow', val:1, turns:2 }],
+                d:'120% 傷害並定身目標 1 回合，對其周圍一格敵人施加減速 −1 格（2 回合）。' },
+  rg_weak:    { n:'致命弱點', q:3, c:'RG', k:'passive', p:{ vsDebuff:0.25 },
+                d:'對帶有任何負面狀態的目標，傷害 +25%。' },
+  rg_rain:    { n:'箭雨', q:4, c:'RG', k:'aoe', pct:1.3, r:1, cd:6, rng:4, fx:'rain',
+                st:[s('weaken',0.2,2)], d:'目標周圍一格所有敵人各 130% 傷害並虛弱 −20%（2 回合）。' },
+  rg_mark:    { n:'死亡標記', q:4, c:'RG', k:'single', rng:0, pct:2.2, cd:6, fx:'mark',
+                st:[s('curse',0.25,2)], resetOnKill:1,
+                d:'220% 傷害並附加詛咒 +25%（2 回合）；擊殺目標則冷卻立刻重置。' },
+  rg_eye:     { n:'千里之瞳', q:4, c:'RG', k:'passive', p:{ rng:1, farNoCounter:3, farDmg:0.2 },
+                d:'射程 +1（山地再 +1）；對 3 格外的目標傷害 +20%、永不被反擊。' },
 
   /* ───────── 法師 ───────── */
-  mg_bolt:    { n:'奧術飛彈', q:0, c:'MG', k:'single', rng:0, pct:1.5, cd:2, ignoreTer:1, fx:'arcane',
-                d:'無視地形防禦的一發飛彈。' },
-  mg_fire:    { n:'火球', q:0, c:'MG', k:'aoe', pct:0.75, r:1, cd:3, rng:4, fx:'fire',
-                d:'在目標周圍一格炸開。' },
-  mg_shard:   { n:'冰錐', q:0, c:'MG', k:'line', rng:0, pct:0.9, len:3, cd:3, fx:'ice',
-                d:'一排冰錐刺穿直線。' },
-  mg_burst:   { n:'烈焰噴發', q:1, c:'MG', k:'aoe', pct:1.0, r:1, cd:3, rng:4, fx:'fire',
-                d:'更猛的一次火焰噴發。' },
-  mg_blink:   { n:'閃現', q:1, c:'MG', k:'teleport', cd:5, rng:5, fx:'blink',
-                d:'瞬移到 5 格內的空地。' },
-  mg_affinity:{ n:'元素親和', q:1, c:'MG', k:'passive', p:{ magicPct:0.1, cdCut:1 },
-                d:'法術傷害 +10%，所有技能冷卻 −1。' },
-  mg_tsunami: { n:'海嘯', q:2, c:'MG', k:'wave', pct:1.45, cd:4, rng:4, push:2, fx:'water',
-                d:'三格寬的水牆推過去，把命中的敵人隨機推開 1～2 格。' },
+  mg_bolt:    { n:'奧術飛彈', q:0, c:'MG', k:'single', rng:0, pct:1.0, cd:2, ignoreTer:1, fx:'arcane',
+                d:'對單體造成 100% 傷害，無視地形防禦。' },
+  mg_fire:    { n:'火球', q:0, c:'MG', k:'aoe', pct:0.7, edgePct:0.3, r:1, cd:2, rng:4, fx:'fire',
+                d:'對目標 70% 傷害，周圍一格 30% 傷害。' },
+  mg_shard:   { n:'冰錐', q:0, c:'MG', k:'line', rng:0, pct:0.6, len:3, cd:3, fx:'ice',
+                st:[{ id:'slow', val:1, turns:1 }], d:'直線 3 格內各 60% 傷害並減速 −1 格。' },
+  mg_burst:   { n:'烈焰噴發', q:1, c:'MG', k:'aoe', pct:0.7, r:1, cd:3, rng:4, fx:'fire',
+                st:[s('burn',0.15,2)], d:'目標及周圍一格 70% 傷害，附加灼燒 15%（2 回合）。' },
+  mg_blink:   { n:'閃現', q:1, c:'MG', k:'teleport', cd:4, rng:4, fx:'blink',
+                self:[s('mov',0,1,1)], d:'瞬移到 4 格內的空地，自身獲得迅捷 +1 格（1 回合）。' },
+  mg_affinity:{ n:'元素親和', q:1, c:'MG', k:'passive', p:{ magicPct:0.25 },
+                d:'所有法術傷害 +25%。' },
+  mg_tsunami: { n:'海嘯', q:2, c:'MG', k:'wave', pct:0.9, cd:4, rng:4, push:1, fx:'water',
+                d:'三格寬的水牆推過去 90% 傷害，把命中的敵人隨機推開 1 格。' },
   mg_ward:    { n:'秘法護盾', q:2, c:'MG', k:'buffSelf', cd:4, fx:'ward',
-                self:[s('shield',2.0,3), s('def',0.5,2)], d:'替自己張開秘法護盾。' },
+                self:[s('shield',1.5,2), s('def',0.3,2)], d:'自身獲得護盾 150% 與堅甲 +30%（2 回合）。' },
   mg_insight: { n:'奧術洞察', q:2, c:'MG', k:'passive', p:{ crit:0.15, splash:0.2 },
                 d:'暴擊率 +15%，暴擊時對相鄰敵人濺射 20%。' },
-  mg_storm:   { n:'烈焰風暴', q:3, c:'MG', k:'aoe', pct:1.65, r:1, cd:4, rng:4, fx:'fire',
-                st:[s('burn',0.25,3)], d:'燃起火風暴，留下持續灼燒。' },
-  mg_thunder: { n:'雷霆貫穿', q:3, c:'MG', k:'line', rng:0, pct:1.85, len:5, cd:5, fx:'bolt',
-                st:[s('sunder',0.25,2)], d:'一道雷貫穿五格並震裂護甲。' },
-  mg_echo:    { n:'熵能迴響', q:3, c:'MG', k:'passive', p:{ aoeDebuff:s('weaken',0.2,2) },
-                d:'你的範圍傷害額外讓目標虛弱。' },
-  mg_meteor:  { n:'隕石術', q:4, c:'MG', k:'delayed', pct:2.0, r:2, cd:6, rng:5, fx:'meteor',
-                d:'指定一點，下回合開始隕石落下 —— 有一回合可以躲。' },
-  mg_zero:    { n:'絕對零度', q:4, c:'MG', k:'aoe', pct:2.0, r:1, cd:6, rng:4, fx:'ice',
-                st:[s('freeze',0,2)], d:'凍結目標周圍一格的所有敵人。' },
-  mg_warp:    { n:'時間錯位', q:4, c:'MG', k:'passive', p:{ cdCut:1, freeCast:0.3 },
-                d:'每回合開始冷卻額外 −1；使用技能後 30% 不進冷卻。' },
+  mg_storm:   { n:'烈焰風暴', q:3, c:'MG', k:'field', pct:1.0, r:1, turns:2, cd:5, rng:4, fx:'fire',
+                st:[s('burn',0.3,3)], d:'指定 3×3 地塊 100% 傷害，火風暴持續 2 回合，範圍內敵人一直被刷新灼燒 30%。' },
+  mg_thunder: { n:'冰晶射擊', q:3, c:'MG', k:'rand', rng:4, pct:0.8, pick:3, cd:5, stChance:0.3, fx:'ice',
+                st:[s('freeze',0,1)], d:'對射程內三個隨機敵人各 80% 傷害，30% 機率冰凍 1 回合。' },
+  mg_echo:    { n:'奧術大師', q:3, c:'MG', k:'passive', p:{ cdCut:1 },
+                d:'所有主動技能的初始冷卻時間 −1 回合。' },
+  mg_meteor:  { n:'死命毒霧', q:4, c:'MG', k:'field', pct:0.8, r:2, turns:2, cd:6, rng:5, fx:'poison',
+                st:[s('poison',0.4,4)], d:'指定 5×5 地塊 80% 傷害，毒霧持續 2 回合，範圍內敵人一直被刷新劇毒 40%。' },
+  mg_zero:    { n:'絕對零度', q:4, c:'MG', k:'aoe', pct:1.0, r:2, cd:6, rng:4, fx:'ice',
+                st:[s('freeze',0,1)], d:'目標周圍兩格所有敵人 100% 傷害並冰凍 1 回合。' },
+  mg_warp:    { n:'時間錯位', q:4, c:'MG', k:'passive', p:{ cdCut:1, freeCast:0.25 },
+                d:'每回合開始所有技能冷卻額外 −1；使用技能時 25% 機率不進冷卻。' },
 
   /* ───────── 牧師 ───────── */
-  cl_heal:    { n:'治癒之光', q:0, c:'CL', k:'heal', rng:0, pct:1.6, cd:2, fx:'heal',
-                d:'治療單一友軍。' },
-  cl_first:   { n:'急救', q:0, c:'CL', k:'heal', rng:0, pct:0.9, cd:3, freeAct:1, fx:'heal',
-                d:'快速治療，不消耗行動。' },
-  cl_smite:   { n:'審判之光', q:0, c:'CL', k:'single', rng:0, pct:1.3, cd:3, fx:'holy',
-                d:'降下一道審判之光。' },
-  cl_mass:    { n:'群體治療', q:1, c:'CL', k:'healAoe', pct:1.1, r:1, cd:3, rng:3, fx:'heal',
-                d:'治療目標周圍一格的所有友軍。' },
-  cl_aura:    { n:'治療光環', q:1, c:'CL', k:'aura', pct:0.25, r:2, turns:4, cd:5, fx:'aura',
-                d:'展開光環，自身兩格內的友軍每回合回復。' },
-  cl_piety:   { n:'虔誠', q:1, c:'CL', k:'passive', p:{ healBack:0.3 },
-                d:'治療時自己回復該次治療量的 30%。' },
-  cl_guard:   { n:'加護', q:2, c:'CL', k:'shield', pct:1.9, cd:3, rng:3, fx:'ward',
-                d:'給友軍一層能吸收傷害的護盾。' },
-  cl_bless:   { n:'神聖祝福', q:2, c:'CL', k:'buffAlly', cd:4, rng:3, fx:'buff',
-                give:[s('regen',0.45,3), s('def',0.3,3)], d:'讓友軍持續回復並更加堅韌。' },
-  cl_drain:   { n:'生命汲取', q:2, c:'CL', k:'passive', p:{ dmgToHeal:0.5 },
-                d:'你造成傷害時，生命最低的友軍回復該傷害的 50%。' },
-  cl_revive:  { n:'復甦禱言', q:3, c:'CL', k:'healAoe', pct:2.0, r:1, cd:5, rng:3, cleanse:1, fx:'heal',
-                d:'大範圍治療，並清除所有負面狀態。' },
-  cl_punish:  { n:'制裁', q:3, c:'CL', k:'single', rng:0, pct:2.5, cd:4, fx:'holy',
-                st:[s('weaken',0.35,3)], d:'制裁一擊，大幅削弱目標的攻擊。' },
-  cl_link:    { n:'生命鏈結', q:3, c:'CL', k:'passive', p:{ linkShare:0.25 },
-                d:'你治療過的目標，下一回合受到的傷害 25% 轉到你身上。' },
-  cl_domain:  { n:'神聖領域', q:4, c:'CL', k:'domain', pct:2.9, r:2, cd:6, fx:'domain',
-                give:[s('atk',0.4,2)], st:[s('silence',0,2)],
-                d:'展開領域：兩格內友軍大量回復並強化，敵人被沉默。' },
-  cl_breath:  { n:'重生之息', q:4, c:'CL', k:'raise', cd:8, uses:2, fx:'raise',
-                d:'讓一個倒下的隊友立刻在你身邊站起來，生命回到 60%。' },
-  cl_martyr:  { n:'殉道', q:4, c:'CL', k:'passive', p:{ martyr:0.4 },
-                d:'你倒下時全隊回復最大生命 40% 並獲得強化。' },
+  cl_heal:    { n:'治癒之光', q:0, c:'CL', k:'heal', rng:0, pct:1.0, cd:2, fx:'heal',
+                d:'對單體友軍進行 100% 治療。' },
+  cl_first:   { n:'急救', q:0, c:'CL', k:'buffAlly', rng:2, cd:3, fx:'heal',
+                give:[s('regen',0.3,3)], d:'對單體友軍施加恢復 30%（3 回合）。' },
+  cl_smite:   { n:'審視', q:0, c:'CL', k:'aoe', rng:3, pct:0, r:0, cd:2, fx:'holy',
+                st:[s('weaken',0.2,2)], d:'對目標附加虛弱 −20%（2 回合）。' },
+  cl_mass:    { n:'群體治療', q:1, c:'CL', k:'healAoe', pct:0.7, r:1, cd:3, rng:3, fx:'heal',
+                d:'指定目標周圍一格友軍各治療 70%。' },
+  cl_aura:    { n:'治療光環', q:1, c:'CL', k:'aura', pct:0.2, r:2, turns:3, cd:4, fx:'aura',
+                d:'自身 2 格內友軍獲得恢復 20%/回合（3 回合）。' },
+  cl_piety:   { n:'虔誠', q:1, c:'CL', k:'passive', p:{ healBoost:0.2 },
+                d:'治療量 +20%。' },
+  cl_guard:   { n:'加護', q:2, c:'CL', k:'buffAlly', rng:3, cd:3, fx:'ward',
+                give:[s('shield',1.3,2), s('def',0.2,2)],
+                d:'為友軍施加護盾 130% 與堅甲 +20%（2 回合）。' },
+  cl_bless:   { n:'神聖祝福', q:2, c:'CL', k:'buffAlly', cd:4, rng:3, cleanse:1, fx:'buff',
+                give:[s('regen',0.3,2)], d:'清除友軍 1 個負面狀態，並附加恢復 30%/回合（2 回合）。' },
+  cl_drain:   { n:'生命汲取', q:2, c:'CL', k:'passive', p:{ healBack:0.1 },
+                d:'進行治療時，自身同時回復該次治療量 10% 的生命。' },
+  cl_revive:  { n:'復甦禱言', q:3, c:'CL', k:'healAoe', pct:1.2, r:1, cd:5, rng:3, cleanse:1, fx:'heal',
+                d:'目標周圍一格友軍各治療 120%，並清除其所有負面狀態。' },
+  cl_punish:  { n:'背金句', q:3, c:'CL', k:'single', rng:0, pct:1.5, cd:4, fx:'holy',
+                st:[s('weaken',0.3,2), s('silence',0,1)],
+                d:'150% 法術傷害，附加虛弱 −30%（2 回合）與沉默 1 回合。' },
+  cl_link:    { n:'買一送一', q:3, c:'CL', k:'passive', p:{ healProc:0.25 },
+                d:'治療目標有 25% 機率額外獲得強化 +15% 或堅甲 +15%（1 回合）。' },
+  cl_domain:  { n:'神聖領域', q:4, c:'CL', k:'field', r:2, turns:2, cd:6, rng:3, heal:1.5, fx:'domain',
+                give:[s('atk',0.2,2), s('regen',0.4,2)],
+                d:'指定 5×5 地塊，領域內友軍每回合治療 150% 並獲得強化 +20% 與恢復 40%（持續 2 回合）。' },
+  cl_breath:  { n:'重生之息', q:4, c:'CL', k:'raise', cd:8, uses:2, raiseHp:0.4, fx:'raise',
+                d:'讓一名倒下的隊友立刻在身邊復活，恢復 40% 生命。' },
+  cl_martyr:  { n:'殉道', q:4, c:'CL', k:'passive', p:{ martyr:0.3 },
+                d:'倒下時，全隊友軍立刻回復 30% 最大生命並獲得護盾 100%。' },
 
   /* ───────── 狂戰士 ───────── */
-  bb_brutal:  { n:'蠻力一擊', q:0, c:'BB', k:'single', pct:1.5, cd:2, rng:1, fx:'slash',
-                d:'一記蠻力猛砍。' },
-  bb_sweep:   { n:'橫掃', q:0, c:'BB', k:'around', pct:0.75, cd:3, fx:'whirl',
-                d:'橫掃周圍一格的所有敵人。' },
-  bb_stomp:   { n:'猛踏', q:0, c:'BB', k:'single', pct:1.1, cd:3, rng:1, push:1, fx:'shock',
-                d:'一腳把面前的敵人踏退一格。' },
-  bb_charge:  { n:'衝鋒', q:1, c:'BB', k:'charge', pct:1.8, len:4, rng:4, cd:4, push:1, fx:'charge',
-                d:'直線衝鋒撞向敵人並把它撞退。' },
-  bb_cyclone: { n:'旋風斬', q:1, c:'BB', k:'around', pct:1.0, cd:3, fx:'whirl',
-                d:'更狠的一次旋風。' },
-  bb_blood:   { n:'嗜血', q:1, c:'BB', k:'passive', p:{ lowHpAtk:1 },
-                d:'生命每少 10%，攻擊 +1。' },
-  bb_rage:    { n:'狂暴', q:2, c:'BB', k:'buffSelf', cd:5, fx:'buff',
-                self:[s('atk',0.6,2), s('mov',0,2,2)], d:'進入狂暴，攻擊和移動大幅提升。' },
-  bb_shout:   { n:'戰吼', q:2, c:'BB', k:'buffAround', r:2, cd:5, fx:'shout',
-                give:[s('atk',0.35,2)], self:[s('def',0.3,2)],
-                d:'一聲怒吼鼓舞兩格內的同伴。' },
-  bb_fervor:  { n:'戰鬥狂熱', q:2, c:'BB', k:'passive', p:{ stackOnHurt:0.12 },
-                d:'每被攻擊一次，下次攻擊 +12%（最多五層）。' },
-  bb_rend:    { n:'撕裂', q:3, c:'BB', k:'single', pct:2.5, cd:3, rng:1, fx:'slash',
-                st:[s('bleed',0.3,3)], d:'撕開傷口，持續流血。' },
-  bb_gore:    { n:'血腥旋風', q:3, c:'BB', k:'around', pct:1.65, cd:5, fx:'whirl',
-                st:[s('bleed',0.2,2)], d:'血肉橫飛的一輪旋風。' },
-  bb_fury:    { n:'血怒', q:3, c:'BB', k:'passive', p:{ lifesteal:0.3 },
-                d:'造成傷害的 30% 轉為生命；生命低於 50% 時翻倍。' },
-  bb_exec:    { n:'斷頭台', q:4, c:'BB', k:'single', pct:3.2, cd:6, rng:1, exec:[0.4, 5.0], fx:'exec',
-                st:[s('fear',0,2)], d:'目標生命低於 40% 時傷害暴增並使其恐懼。' },
-  bb_slay:    { n:'屠戮', q:4, c:'BB', k:'around', pct:2.0, cd:6, fx:'whirl',
-                st:[s('stun',0,1)], d:'一輪屠戮把周圍的敵人全部打暈。' },
-  bb_deathless:{ n:'不死狂戰', q:4, c:'BB', k:'passive', p:{ killRefresh:2 },
-                d:'每擊殺一個敵人立刻恢復移動和行動（每回合最多兩次）。' },
+  bb_brutal:  { n:'蠻力一擊', q:0, c:'BB', k:'single', pct:1.3, cd:2, rng:1, fx:'slash',
+                d:'單體 130% 傷害。' },
+  bb_sweep:   { n:'挑飛', q:0, c:'BB', k:'single', pct:0.5, cd:3, rng:1, fx:'shock',
+                st:[s('disarm',0,1)], d:'50% 傷害並繳械目標 1 回合（不能用普攻）。' },
+  bb_stomp:   { n:'橫掃', q:0, c:'BB', k:'around', pct:0.6, cd:3, fx:'whirl',
+                d:'橫掃周圍一格的所有敵人各 60% 傷害。' },
+  bb_charge:  { n:'衝鋒', q:1, c:'BB', k:'charge', pct:1.2, len:4, rng:4, cd:3, push:1, fx:'charge',
+                d:'向敵人衝鋒最多 4 格，造成 120% 傷害並撞退一格。' },
+  bb_cyclone: { n:'旋風斬', q:1, c:'BB', k:'around', pct:0.8, cd:3, fx:'whirl',
+                d:'周圍一格所有敵人各 80% 傷害。' },
+  bb_blood:   { n:'嗜血', q:1, c:'BB', k:'passive', p:{ lowHpAtkPct:0.02 },
+                d:'生命每少 10%，攻擊力 +2%（最多 +20%）。' },
+  bb_rage:    { n:'狂暴', q:2, c:'BB', k:'buffSelf', cd:4, fx:'buff', hpCost:0.2,
+                self:[s('atk',0.4,2), s('mov',0,2,2)],
+                d:'扣除當前生命的 20%，換取強化 +40% 與迅捷 +2 格（2 回合）。' },
+  bb_shout:   { n:'亂斬', q:2, c:'BB', k:'multi', pct:0.4, hits:4, cd:3, rng:1, fx:'slash',
+                d:'對單體造成 40% × 4 的多段傷害。' },
+  bb_fervor:  { n:'戰鬥狂熱', q:2, c:'BB', k:'passive', p:{ stackOnHurt:0.08 },
+                d:'每被攻擊一次，下次攻擊 +8%（最多疊加），出手後清空。' },
+  bb_rend:    { n:'裂斬', q:3, c:'BB', k:'single', pct:1.8, cd:3, rng:1, fx:'slash',
+                st:[s('sunder',0.3,2)], d:'180% 傷害並破甲 −30%（2 回合）。' },
+  bb_gore:    { n:'一劍封喉', q:3, c:'BB', k:'single', pct:1.8, cd:4, rng:1, fx:'slash',
+                st:[s('silence',0,1)], d:'180% 傷害並沉默目標 1 回合。' },
+  bb_fury:    { n:'血怒', q:3, c:'BB', k:'passive', p:{ lifesteal:0.1 },
+                d:'造成物理傷害的 10% 轉為生命；生命低於 30% 時翻倍（20%）。' },
+  bb_exec:    { n:'血腥旋風', q:4, c:'BB', k:'around', pct:1.2, cd:5, lifesteal:0.1, fx:'whirl',
+                d:'旋轉對周圍一格敵人各 120% 傷害，造成的傷害 10% 轉為生命（生命 <30% 翻倍）。' },
+  bb_slay:    { n:'屠戮', q:4, c:'BB', k:'single', pct:1.5, cd:6, rng:1, fx:'exec',
+                self:[s('atk',0.2,1)], resetOnKill:1, killAct:1,
+                d:'強化自身 20%，150% 傷害；若擊殺目標，冷卻清零並恢復本回合行動。' },
+  bb_deathless:{ n:'血腥氣息', q:4, c:'BB', k:'passive', p:{ procFear:0.25 },
+                d:'每次造成傷害時 25% 機率使目標恐懼 1 回合。' },
 
   /* ───────── 通用 ───────── */
   //  melee = 騎士／狂戰士   range = 遊俠／法師   sup = 牧師／法師   all = 全部
@@ -6216,6 +6221,29 @@ function refreshPending() {
       m.rotation.x = -Math.PI / 2;
       m.position.set(wx(x), ter(x, y).h + 0.05, wz(y));
       pendGroup.add(m);
+    }
+  }
+}
+
+// 持續地塊（烈焰風暴／死命毒霧／神聖領域）：在地上鋪一層半透明色塊
+let fieldGroup = null;
+function refreshFields() {
+  if (fieldGroup) fxGroup.remove(fieldGroup);
+  fieldGroup = new THREE.Group();
+  fxGroup.add(fieldGroup);
+  for (const p of (typeof FIELDS !== 'undefined' ? FIELDS : [])) {
+    const col = p.heal ? 0x8be6a0 : p.fx === 'ice' ? 0x8fd8ff : 0xff7a20;
+    for (let dx = -p.r; dx <= p.r; dx++) for (let dy = -p.r; dy <= p.r; dy++) {
+      const x = p.x + dx, y = p.y + dy;
+      if (!inBoard(x, y)) continue;
+      const m = new THREE.Mesh(
+        new THREE.PlaneGeometry(TILE * 0.92, TILE * 0.92),
+        new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.22,
+          depthWrite: false, fog: false })
+      );
+      m.rotation.x = -Math.PI / 2;
+      m.position.set(wx(x), ter(x, y).h + 0.04, wz(y));
+      fieldGroup.add(m);
     }
   }
 }
@@ -6857,9 +6885,12 @@ function statOf(u, k) {
 const mhpOf = u => Math.max(1, statOf(u, 'hp'));
 function atkOf(u) {
   let v = statOf(u, 'atk');
-  // 嗜血：職業本身的 + 被動再疊一份
+  // 嗜血：職業本身的 + 被動再疊一份（每少 10% 生命固定加值）
   const lo = (u.cls === 'BB' ? 1 : 0) + pasOf(u, 'lowHpAtk');
   if (lo) v += Math.floor((1 - u.hp / mhpOf(u)) * 10) * lo;
+  // 新版嗜血：每少 10% 生命 +百分比（例如 0.02 → 最多 +20%）
+  const lop = pasOf(u, 'lowHpAtkPct');
+  if (lop) v = Math.round(v * (1 + Math.floor((1 - u.hp / mhpOf(u)) * 10) * lop));
   if (u.stk) v = Math.round(v * (1 + u.stk));                       // 戰鬥狂熱層數
   return v;
 }
@@ -6919,6 +6950,7 @@ function dmgCalc(a, d, opt) {
   let D = defOf(d) + (opt.ignoreTer ? 0 : dt.def) + guardOf(d);
   const rend = affixVal(a, 'rend');
   if (rend) D -= D * rend;
+  if (opt.pen) D -= D * opt.pen;               // 穿甲箭之類「無視目標 X% 防禦」
   if (a.cls === 'MG') D = Math.floor(D / 2);   // 法師穿透被動，跟破甲詞綴分開算，不共用同一行
   D = Math.max(0, D);
 
@@ -7416,9 +7448,9 @@ async function die(u, killer) {
     for (const o of alive()) {
       if (o.side !== u.side || o === u) continue;
       healUnit(u, o, Math.round(mhpOf(o) * mt));
-      addSt(o, u, { id: 'atk', pct: 0.3, turns: 2 });
+      addSt(o, u, { id: 'shield', pct: 1.0, turns: 2 });
     }
-    log(`<b>${nameOf(u)}</b> 的殉道治癒了全隊`);
+    log(`<b>${nameOf(u)}</b> 的殉道治癒了全隊並張開護盾`);
   }
   if (isHero(u)) {
     // 英雄不是真的死，會退回營地養傷，但會掉三成經驗
@@ -7563,7 +7595,8 @@ const healAmt = u => Math.max(1, Math.round(atkOf(u) * (base(u).healPct || 0)));
 function skillReady(u, id) {
   const s = SK[id];
   return !!s && isHero(u) && !s.k.startsWith('passive') && !(u.cds[id] > 0)
-    && !u.acted && canSkillU(u);
+    && !u.acted && canSkillU(u)
+    && !(s.noAfterMove && u.moved);          // 蓄力箭：本回合已經移動過就不能放
 }
 
 // 技能的射程 / 範圍，加上被動修正
@@ -7577,8 +7610,10 @@ async function hit(u, t, s, opt) {
   if (s.exec && t.hp / mhpOf(t) <= s.exec[0]) mult = s.exec[1];
   if (pasOf(u, 'vsDebuff') && t.st.some(x => !ST[x.id].good)) mult *= 1 + pasOf(u, 'vsDebuff');
   if (pasOf(u, 'magicPct') && dmgType(u) === 'magic') mult *= 1 + pasOf(u, 'magicPct');
+  if (pasOf(u, 'singleDmg') && !opt.aoe) mult *= 1 + pasOf(u, 'singleDmg');     // 專注
+  if (pasOf(u, 'farDmg') && dist(u, t) >= 3) mult *= 1 + pasOf(u, 'farDmg');    // 千里之瞳
 
-  let dmg = dmgCalc(u, t, { mult, noFlank: opt.noFlank, ignoreTer: s.ignoreTer });
+  let dmg = dmgCalc(u, t, { mult, noFlank: opt.noFlank, ignoreTer: s.ignoreTer, pen: s.armorPen });
   dmg = Math.round(dmg * (1 + stVal(t, 'curse')));
   if (hasSt(t, 'freeze')) dmg = Math.round(dmg * 1.5);
 
@@ -7600,6 +7635,13 @@ async function hit(u, t, s, opt) {
   const ae = pasOf(u, 'aoeDebuff');
   if (ae && opt.aoe) addSt(t, u, ae);
 
+  // 技能自帶吸血（血腥旋風）：生命低於三成翻倍
+  if (s.lifesteal && real > 0) {
+    let ls = s.lifesteal; if (u.hp / mhpOf(u) < 0.3) ls *= 2;
+    const h = Math.min(Math.ceil(real * ls), mhpOf(u) - u.hp);
+    if (h > 0) { u.hp += h; floatText(u.x, u.y, '+' + h, 'heal'); updTag(u); }
+  }
+
   if (t.hp <= 0) await die(t, u); else gainExp(u, XP_HIT);
   return real;
 }
@@ -7607,7 +7649,7 @@ async function hit(u, t, s, opt) {
 // 吸血、生命汲取這類「造成傷害之後」的被動
 function afterDamage(u, t, dmg) {
   let ls = pasOf(u, 'lifesteal');
-  if (ls && u.hp / mhpOf(u) < 0.5) ls *= 2;
+  if (ls && u.hp / mhpOf(u) < 0.3) ls *= 2;      // 血怒：生命低於三成吸血翻倍
   ls += affixVal(u, 'vamp');
   if (ls > 0) {
     const h = Math.min(Math.ceil(dmg * ls), mhpOf(u) - u.hp);
@@ -7640,6 +7682,9 @@ async function onHurtPassives(a, d, real, crit, ranged) {
       if (o.hp <= 0) await die(o, a);
     }
   }
+  // 血腥氣息：造成傷害時機率使目標恐懼（普攻／技能都算）
+  const pf = pasOf(a, 'procFear');
+  if (pf && d.alive && real > 0 && grng() < pf) addSt(d, a, { id: 'fear', turns: 1 });
   // 戰鬥狂熱：被打一次疊一層，最多五層
   const st = pasOf(d, 'stackOnHurt');
   if (st && d.alive) d.stk = Math.min(st * 5, (d.stk || 0) + st);
@@ -7682,6 +7727,7 @@ function killRefresh(u) {
 
 // 治療（含牧師被動回饋）
 function healUnit(src, t, amt) {
+  if (pasOf(src, 'healBoost')) amt = Math.round(amt * (1 + pasOf(src, 'healBoost')));  // 虔誠
   if (hasSt(t, 'poison')) amt = Math.ceil(amt / 2);
   const h = Math.min(amt, mhpOf(t) - t.hp);
   if (h <= 0) return 0;
@@ -7693,6 +7739,10 @@ function healUnit(src, t, amt) {
     const b = Math.min(Math.round(h * back), mhpOf(src) - src.hp);
     if (b > 0) { src.hp += b; floatText(src.x, src.y, '+' + b, 'heal'); updTag(src); }
   }
+  // 買一送一：治療目標有機率額外得到一個增益
+  const hp = pasOf(src, 'healProc');
+  if (hp && src !== t && grng() < hp)
+    addSt(t, src, grng() < 0.5 ? { id: 'atk', pct: 0.15, turns: 1 } : { id: 'def', pct: 0.15, turns: 1 });
   if (pasOf(src, 'linkShare')) t.link = 2;
   gainExp(src, XP_HEAL);
   return h;
@@ -7734,11 +7784,17 @@ async function useSkill(u, id, a) {
       cast(dmgType(u) === 'melee' ? A.melee : dmgType(u) === 'ranged' ? A.shoot : A.cast);
       await wait(220);
       playFX(s.fx, u, tgt);
+      const tgx = tgt.x, tgy = tgt.y;
       const dead = tgt.hp <= (await hit(u, tgt, s)) ;
       if (s.push) pushUnit(tgt, u.x, u.y, s.push);
       if (s.spendTurn) tgt.turned = true;
       if (s.rooted) u.moved = true;
       if (s.resetOnKill && dead) u.cds[id] = 0;
+      if (s.killAct && dead) killRefresh(u);              // 屠戮：擊殺回復本回合行動
+      // 蛛絲箭：對目標周圍一格的敵人也上狀態
+      if (s.aoeSt) for (const o of enemiesIn(u, tgx, tgy, 1)) if (o !== tgt) for (const e of s.aoeSt) addSt(o, u, e);
+      // 後撤步：命中後往遠離目標的方向退 N 格
+      if (s.retreat) { pushUnit(u, tgx, tgy, s.retreat); u.moved = true; }
       for (const e of (s.self || [])) addSt(u, u, e);
       break;
     }
@@ -7811,9 +7867,43 @@ async function useSkill(u, id, a) {
       playFX(s.fx, u, { x: tx, y: ty });
       await wait(120);
       for (const o of enemiesIn(u, tx, ty, s.r).slice()) {
-        if (s.pct) await hit(u, o, s, { noFlank: 1, aoe: 1 });
+        // 火球之類：正中心用 pct，外圈用 edgePct
+        const edge = s.edgePct !== undefined && (o.x !== tx || o.y !== ty);
+        if (s.pct || edge) await hit(u, o, edge ? { ...s, pct: s.edgePct } : s, { noFlank: 1, aoe: 1 });
         else for (const e of (s.st || [])) addSt(o, u, e);
       }
+      break;
+    }
+    case 'rand': {
+      // 冰晶射擊：射程內隨機挑 pick 個敵人（只有一個就全打它），機率上狀態
+      faceTile(u, tx, ty);
+      cast(A.cast); await wait(200);
+      let pool = enemiesIn(u, u.x, u.y, skRng(u, s));
+      const list = [];
+      for (let i = 0; i < s.pick; i++) {
+        if (!pool.length) { if (tgt) list.push(tgt); continue; }
+        list.push(pool.length === 1 ? pool[0] : pool[Math.floor(grng() * pool.length)]);
+      }
+      for (const o of list) {
+        if (!o || !o.alive) continue;
+        playFX(s.fx, u, o);
+        await hit(u, o, { ...s, st: [] }, { noFlank: 1 });
+        if (o.alive && s.stChance) for (const e of (s.st || [])) if (grng() < s.stChance) addSt(o, u, e);
+        await wait(120);
+      }
+      break;
+    }
+    case 'field': {
+      // 持續地塊：範圍內每回合結算一次傷害＋刷新狀態，維持 turns 回合
+      faceTile(u, tx, ty);
+      cast(); await wait(260);
+      playFX(s.fx, u, { x: tx, y: ty });
+      ringFX(tx, ty, s.fx === 'ice' ? 0x8fe6ff : 0xff7a20, TILE * (s.r * 2 + 1), 0.7);
+      FIELDS.push({ x: tx, y: ty, r: s.r, pct: s.pct || 0, st: s.st || null, give: s.give || null,
+        heal: s.heal || 0, fx: s.fx, side: u.side, uid: u.id, turns: (s.turns || 2) + 1 });
+      refreshFields();
+      // 施放當下先結算一次，不然要等對方回合才有效果
+      await fieldHit(FIELDS[FIELDS.length - 1]);
       break;
     }
     case 'pick': {
@@ -7946,6 +8036,12 @@ async function useSkill(u, id, a) {
     case 'buffSelf': {
       play(u, A.cheer, true); await wait(300);
       playFX(s.fx, u);
+      // 狂暴：先付出當前生命的一個比例當代價
+      if (s.hpCost) {
+        const c = Math.max(1, Math.floor(u.hp * s.hpCost));
+        u.hp = Math.max(1, u.hp - c);
+        floatText(u.x, u.y, String(c), 'dmg');
+      }
       for (const e of (s.self || [])) addSt(u, u, e);
       if (s.killRefresh) u.soloTurn = G.turn;
       break;
@@ -7953,6 +8049,7 @@ async function useSkill(u, id, a) {
     case 'buffAlly': {
       if (!tgt) break;
       cast(); await wait(280);
+      if (s.cleanse) { const b = tgt.st.find(x => !ST[x.id].good); if (b) { tgt.st = tgt.st.filter(x => x !== b); updTag(tgt); } }
       playFX(s.fx, u, tgt);
       for (const e of (s.give || [])) addSt(tgt, u, e);
       break;
@@ -7985,7 +8082,7 @@ async function useSkill(u, id, a) {
       if (!spot) { toast('旁邊沒有空位'); u.cds[id] = 0; return; }
       cast(); await wait(300);
       down.x = spot[0]; down.y = spot[1]; down.alive = true; down.down = 0;
-      down.hp = Math.ceil(mhpOf(down) * 0.6);
+      down.hp = Math.ceil(mhpOf(down) * (s.raiseHp || 0.6));
       down.st = []; down.turned = false;
       buildUnitView(down); makeTag(down);
       playFX(s.fx, u, down);
@@ -7998,8 +8095,33 @@ async function useSkill(u, id, a) {
   play(u, A.idle);
 }
 
-/* ── 延遲技能（隕石）與光環 ── */
-let PENDING = [], AURAS = [];
+/* ── 延遲技能（隕石）、光環、持續地塊 ── */
+let PENDING = [], AURAS = [], FIELDS = [];
+
+// 一個持續地塊結算一次：範圍內敵人吃傷害＋刷新狀態，範圍內友軍回血＋刷新增益
+async function fieldHit(p) {
+  const u = byId(p.uid);
+  if (!u) return;
+  if (p.pct) for (const o of enemiesIn(u, p.x, p.y, p.r).slice())
+    await hit(u, o, { pct: p.pct, st: p.st || [] }, { noFlank: 1, aoe: 1 });
+  else if (p.st) for (const o of enemiesIn(u, p.x, p.y, p.r).slice())
+    for (const e of p.st) addSt(o, u, e);
+  if (p.heal || p.give) for (const o of alliesIn(u, p.x, p.y, p.r)) {
+    if (p.heal) healUnit(u, o, Math.round(atkOf(u) * p.heal));
+    for (const e of (p.give || [])) addSt(o, u, e);
+  }
+}
+
+// 每個「本方」的回合開始時，本方放的地塊結算一次並倒數
+async function tickFields(side) {
+  for (let i = FIELDS.length - 1; i >= 0; i--) {
+    const p = FIELDS[i];
+    if (p.side !== side) continue;
+    if (--p.turns <= 0) { FIELDS.splice(i, 1); continue; }
+    await fieldHit(p);
+  }
+  refreshFields();
+}
 
 async function resolvePending(side) {
   for (let i = PENDING.length - 1; i >= 0; i--) {
@@ -8078,6 +8200,7 @@ async function startTurn(side) {
   tickAuras(side);
   for (const u of alive().slice()) if (u.side === side) await tickStatus(u);
   await resolvePending(side);
+  await tickFields(side);
   if (G.over) return;
 
   dimDone(); refreshTop(); refreshRoster();
@@ -8234,7 +8357,7 @@ function newGame(seed, picks) {
   G.bagPhase = null;                                  // 不在背包回合時是 null
   G.news = [0, 0];                                    // 有沒有沒看過的新掉落
   G.picks = picks || [CLS_ORDER.slice(0, TEAM_SIZE), CLS_ORDER.slice(0, TEAM_SIZE)];
-  PENDING = []; AURAS = []; bookSeq = 0;
+  PENDING = []; AURAS = []; FIELDS = []; bookSeq = 0;
   uidSeq = 0; itemSeq = 0; wakeSeq = 0;
   sel = null; phase = 'idle'; preMove = null; busy = false; skillMode = null;
   logs.length = 0;
@@ -9071,7 +9194,9 @@ function drawRespawnTags() {
   list.forEach((u, i) => {
     const el = respTags[i];
     if (!el) return;
-    const s = u.spawnAt || u.home;
+    // 倒下的英雄常常沒有 spawnAt 也沒有 home，退回自家營地座標；再沒有就跳過不畫
+    const s = u.spawnAt || u.home || (u.side < 2 ? CAMP[u.side] : null);
+    if (!s || !inBoard(s[0], s[1])) { el.style.display = 'none'; return; }
     projV.set(wx(s[0]), ter(s[0], s[1]).h + 0.4, wz(s[1])).project(camera);
     if (projV.z > 1 || Math.abs(projV.x) > 1.1 || Math.abs(projV.y) > 1.1) { el.style.display = 'none'; return; }
     el.style.display = '';
@@ -9083,10 +9208,10 @@ function drawRespawnTags() {
 // 施放技能時，滑鼠指到的目標上會出現一個準心：傷害技能紅色、增益技能綠色
 // 技能怎麼選目標：自己身上／敵方單位／友方單位／空地或格子
 const K_SELF = ['fan', 'cross', 'around', 'retreat', 'refreshSelf', 'aura', 'buffSelf', 'buffAround', 'domain', 'raise'];
-const K_ENEMY = ['single', 'multi'];
+const K_ENEMY = ['single', 'multi', 'rand'];
 const K_ALLY = ['heal', 'shield', 'buffAlly', 'refreshAlly'];
 const K_EMPTY = ['teleport', 'trap', 'trapN'];
-const HARM = ['single', 'multi', 'fan', 'cross', 'around', 'line', 'aoe', 'pick', 'wave', 'charge', 'delayed', 'trap', 'trapN'];
+const HARM = ['single', 'multi', 'fan', 'cross', 'around', 'line', 'aoe', 'pick', 'wave', 'charge', 'delayed', 'trap', 'trapN', 'rand', 'field'];
 const skAoeR = s => (s.k === 'around' || s.k === 'fan' || s.k === 'cross' ? 1 : s.r || 0);
 function drawReticle() {
   const el = $('reticle');
@@ -9413,7 +9538,7 @@ function buildSkillBar(u) {
     b.onpointerleave = hideSkillTip;
     // 用 class 而不是 disabled：disabled 的按鈕在瀏覽器裡收不到滑鼠事件，
     // 那樣冷卻中或不是自己回合的時候就看不到技能說明了
-    const off = cd > 0 || u.acted || !canAct() || !canSkillU(u);
+    const off = cd > 0 || u.acted || !canAct() || !canSkillU(u) || (s.noAfterMove && u.moved);
     if (off) b.classList.add('off');
     b.onclick = () => {
       if (off) return;
@@ -9901,7 +10026,8 @@ const K_LABEL = {
   line: '直線', aoe: '範圍', pick: '散射', wave: '波狀', charge: '衝鋒', delayed: '延遲',
   teleport: '位移', retreat: '撤退', refreshSelf: '再動', refreshAlly: '再動', trap: '陷阱',
   trapN: '陷阱', heal: '治療', healAoe: '群療', aura: '光環', shield: '護盾',
-  buffSelf: '自強', buffAlly: '增益', buffAround: '團隊', domain: '領域', raise: '復活'
+  buffSelf: '自強', buffAlly: '增益', buffAround: '團隊', domain: '領域', raise: '復活',
+  frontbox: '範圍', rand: '亂射', field: '地塊'
 };
 const skClsTag = id => {
   const s = SK[id];

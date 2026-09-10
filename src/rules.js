@@ -73,9 +73,12 @@ function statOf(u, k) {
 const mhpOf = u => Math.max(1, statOf(u, 'hp'));
 function atkOf(u) {
   let v = statOf(u, 'atk');
-  // 嗜血：職業本身的 + 被動再疊一份
+  // 嗜血：職業本身的 + 被動再疊一份（每少 10% 生命固定加值）
   const lo = (u.cls === 'BB' ? 1 : 0) + pasOf(u, 'lowHpAtk');
   if (lo) v += Math.floor((1 - u.hp / mhpOf(u)) * 10) * lo;
+  // 新版嗜血：每少 10% 生命 +百分比（例如 0.02 → 最多 +20%）
+  const lop = pasOf(u, 'lowHpAtkPct');
+  if (lop) v = Math.round(v * (1 + Math.floor((1 - u.hp / mhpOf(u)) * 10) * lop));
   if (u.stk) v = Math.round(v * (1 + u.stk));                       // 戰鬥狂熱層數
   return v;
 }
@@ -135,6 +138,7 @@ function dmgCalc(a, d, opt) {
   let D = defOf(d) + (opt.ignoreTer ? 0 : dt.def) + guardOf(d);
   const rend = affixVal(a, 'rend');
   if (rend) D -= D * rend;
+  if (opt.pen) D -= D * opt.pen;               // 穿甲箭之類「無視目標 X% 防禦」
   if (a.cls === 'MG') D = Math.floor(D / 2);   // 法師穿透被動，跟破甲詞綴分開算，不共用同一行
   D = Math.max(0, D);
 
@@ -632,9 +636,9 @@ async function die(u, killer) {
     for (const o of alive()) {
       if (o.side !== u.side || o === u) continue;
       healUnit(u, o, Math.round(mhpOf(o) * mt));
-      addSt(o, u, { id: 'atk', pct: 0.3, turns: 2 });
+      addSt(o, u, { id: 'shield', pct: 1.0, turns: 2 });
     }
-    log(`<b>${nameOf(u)}</b> 的殉道治癒了全隊`);
+    log(`<b>${nameOf(u)}</b> 的殉道治癒了全隊並張開護盾`);
   }
   if (isHero(u)) {
     // 英雄不是真的死，會退回營地養傷，但會掉三成經驗
@@ -779,7 +783,8 @@ const healAmt = u => Math.max(1, Math.round(atkOf(u) * (base(u).healPct || 0)));
 function skillReady(u, id) {
   const s = SK[id];
   return !!s && isHero(u) && !s.k.startsWith('passive') && !(u.cds[id] > 0)
-    && !u.acted && canSkillU(u);
+    && !u.acted && canSkillU(u)
+    && !(s.noAfterMove && u.moved);          // 蓄力箭：本回合已經移動過就不能放
 }
 
 // 技能的射程 / 範圍，加上被動修正
@@ -793,8 +798,10 @@ async function hit(u, t, s, opt) {
   if (s.exec && t.hp / mhpOf(t) <= s.exec[0]) mult = s.exec[1];
   if (pasOf(u, 'vsDebuff') && t.st.some(x => !ST[x.id].good)) mult *= 1 + pasOf(u, 'vsDebuff');
   if (pasOf(u, 'magicPct') && dmgType(u) === 'magic') mult *= 1 + pasOf(u, 'magicPct');
+  if (pasOf(u, 'singleDmg') && !opt.aoe) mult *= 1 + pasOf(u, 'singleDmg');     // 專注
+  if (pasOf(u, 'farDmg') && dist(u, t) >= 3) mult *= 1 + pasOf(u, 'farDmg');    // 千里之瞳
 
-  let dmg = dmgCalc(u, t, { mult, noFlank: opt.noFlank, ignoreTer: s.ignoreTer });
+  let dmg = dmgCalc(u, t, { mult, noFlank: opt.noFlank, ignoreTer: s.ignoreTer, pen: s.armorPen });
   dmg = Math.round(dmg * (1 + stVal(t, 'curse')));
   if (hasSt(t, 'freeze')) dmg = Math.round(dmg * 1.5);
 
@@ -816,6 +823,13 @@ async function hit(u, t, s, opt) {
   const ae = pasOf(u, 'aoeDebuff');
   if (ae && opt.aoe) addSt(t, u, ae);
 
+  // 技能自帶吸血（血腥旋風）：生命低於三成翻倍
+  if (s.lifesteal && real > 0) {
+    let ls = s.lifesteal; if (u.hp / mhpOf(u) < 0.3) ls *= 2;
+    const h = Math.min(Math.ceil(real * ls), mhpOf(u) - u.hp);
+    if (h > 0) { u.hp += h; floatText(u.x, u.y, '+' + h, 'heal'); updTag(u); }
+  }
+
   if (t.hp <= 0) await die(t, u); else gainExp(u, XP_HIT);
   return real;
 }
@@ -823,7 +837,7 @@ async function hit(u, t, s, opt) {
 // 吸血、生命汲取這類「造成傷害之後」的被動
 function afterDamage(u, t, dmg) {
   let ls = pasOf(u, 'lifesteal');
-  if (ls && u.hp / mhpOf(u) < 0.5) ls *= 2;
+  if (ls && u.hp / mhpOf(u) < 0.3) ls *= 2;      // 血怒：生命低於三成吸血翻倍
   ls += affixVal(u, 'vamp');
   if (ls > 0) {
     const h = Math.min(Math.ceil(dmg * ls), mhpOf(u) - u.hp);
@@ -856,6 +870,9 @@ async function onHurtPassives(a, d, real, crit, ranged) {
       if (o.hp <= 0) await die(o, a);
     }
   }
+  // 血腥氣息：造成傷害時機率使目標恐懼（普攻／技能都算）
+  const pf = pasOf(a, 'procFear');
+  if (pf && d.alive && real > 0 && grng() < pf) addSt(d, a, { id: 'fear', turns: 1 });
   // 戰鬥狂熱：被打一次疊一層，最多五層
   const st = pasOf(d, 'stackOnHurt');
   if (st && d.alive) d.stk = Math.min(st * 5, (d.stk || 0) + st);
@@ -898,6 +915,7 @@ function killRefresh(u) {
 
 // 治療（含牧師被動回饋）
 function healUnit(src, t, amt) {
+  if (pasOf(src, 'healBoost')) amt = Math.round(amt * (1 + pasOf(src, 'healBoost')));  // 虔誠
   if (hasSt(t, 'poison')) amt = Math.ceil(amt / 2);
   const h = Math.min(amt, mhpOf(t) - t.hp);
   if (h <= 0) return 0;
@@ -909,6 +927,10 @@ function healUnit(src, t, amt) {
     const b = Math.min(Math.round(h * back), mhpOf(src) - src.hp);
     if (b > 0) { src.hp += b; floatText(src.x, src.y, '+' + b, 'heal'); updTag(src); }
   }
+  // 買一送一：治療目標有機率額外得到一個增益
+  const hp = pasOf(src, 'healProc');
+  if (hp && src !== t && grng() < hp)
+    addSt(t, src, grng() < 0.5 ? { id: 'atk', pct: 0.15, turns: 1 } : { id: 'def', pct: 0.15, turns: 1 });
   if (pasOf(src, 'linkShare')) t.link = 2;
   gainExp(src, XP_HEAL);
   return h;
@@ -950,11 +972,17 @@ async function useSkill(u, id, a) {
       cast(dmgType(u) === 'melee' ? A.melee : dmgType(u) === 'ranged' ? A.shoot : A.cast);
       await wait(220);
       playFX(s.fx, u, tgt);
+      const tgx = tgt.x, tgy = tgt.y;
       const dead = tgt.hp <= (await hit(u, tgt, s)) ;
       if (s.push) pushUnit(tgt, u.x, u.y, s.push);
       if (s.spendTurn) tgt.turned = true;
       if (s.rooted) u.moved = true;
       if (s.resetOnKill && dead) u.cds[id] = 0;
+      if (s.killAct && dead) killRefresh(u);              // 屠戮：擊殺回復本回合行動
+      // 蛛絲箭：對目標周圍一格的敵人也上狀態
+      if (s.aoeSt) for (const o of enemiesIn(u, tgx, tgy, 1)) if (o !== tgt) for (const e of s.aoeSt) addSt(o, u, e);
+      // 後撤步：命中後往遠離目標的方向退 N 格
+      if (s.retreat) { pushUnit(u, tgx, tgy, s.retreat); u.moved = true; }
       for (const e of (s.self || [])) addSt(u, u, e);
       break;
     }
@@ -1027,9 +1055,43 @@ async function useSkill(u, id, a) {
       playFX(s.fx, u, { x: tx, y: ty });
       await wait(120);
       for (const o of enemiesIn(u, tx, ty, s.r).slice()) {
-        if (s.pct) await hit(u, o, s, { noFlank: 1, aoe: 1 });
+        // 火球之類：正中心用 pct，外圈用 edgePct
+        const edge = s.edgePct !== undefined && (o.x !== tx || o.y !== ty);
+        if (s.pct || edge) await hit(u, o, edge ? { ...s, pct: s.edgePct } : s, { noFlank: 1, aoe: 1 });
         else for (const e of (s.st || [])) addSt(o, u, e);
       }
+      break;
+    }
+    case 'rand': {
+      // 冰晶射擊：射程內隨機挑 pick 個敵人（只有一個就全打它），機率上狀態
+      faceTile(u, tx, ty);
+      cast(A.cast); await wait(200);
+      let pool = enemiesIn(u, u.x, u.y, skRng(u, s));
+      const list = [];
+      for (let i = 0; i < s.pick; i++) {
+        if (!pool.length) { if (tgt) list.push(tgt); continue; }
+        list.push(pool.length === 1 ? pool[0] : pool[Math.floor(grng() * pool.length)]);
+      }
+      for (const o of list) {
+        if (!o || !o.alive) continue;
+        playFX(s.fx, u, o);
+        await hit(u, o, { ...s, st: [] }, { noFlank: 1 });
+        if (o.alive && s.stChance) for (const e of (s.st || [])) if (grng() < s.stChance) addSt(o, u, e);
+        await wait(120);
+      }
+      break;
+    }
+    case 'field': {
+      // 持續地塊：範圍內每回合結算一次傷害＋刷新狀態，維持 turns 回合
+      faceTile(u, tx, ty);
+      cast(); await wait(260);
+      playFX(s.fx, u, { x: tx, y: ty });
+      ringFX(tx, ty, s.fx === 'ice' ? 0x8fe6ff : 0xff7a20, TILE * (s.r * 2 + 1), 0.7);
+      FIELDS.push({ x: tx, y: ty, r: s.r, pct: s.pct || 0, st: s.st || null, give: s.give || null,
+        heal: s.heal || 0, fx: s.fx, side: u.side, uid: u.id, turns: (s.turns || 2) + 1 });
+      refreshFields();
+      // 施放當下先結算一次，不然要等對方回合才有效果
+      await fieldHit(FIELDS[FIELDS.length - 1]);
       break;
     }
     case 'pick': {
@@ -1162,6 +1224,12 @@ async function useSkill(u, id, a) {
     case 'buffSelf': {
       play(u, A.cheer, true); await wait(300);
       playFX(s.fx, u);
+      // 狂暴：先付出當前生命的一個比例當代價
+      if (s.hpCost) {
+        const c = Math.max(1, Math.floor(u.hp * s.hpCost));
+        u.hp = Math.max(1, u.hp - c);
+        floatText(u.x, u.y, String(c), 'dmg');
+      }
       for (const e of (s.self || [])) addSt(u, u, e);
       if (s.killRefresh) u.soloTurn = G.turn;
       break;
@@ -1169,6 +1237,7 @@ async function useSkill(u, id, a) {
     case 'buffAlly': {
       if (!tgt) break;
       cast(); await wait(280);
+      if (s.cleanse) { const b = tgt.st.find(x => !ST[x.id].good); if (b) { tgt.st = tgt.st.filter(x => x !== b); updTag(tgt); } }
       playFX(s.fx, u, tgt);
       for (const e of (s.give || [])) addSt(tgt, u, e);
       break;
@@ -1201,7 +1270,7 @@ async function useSkill(u, id, a) {
       if (!spot) { toast('旁邊沒有空位'); u.cds[id] = 0; return; }
       cast(); await wait(300);
       down.x = spot[0]; down.y = spot[1]; down.alive = true; down.down = 0;
-      down.hp = Math.ceil(mhpOf(down) * 0.6);
+      down.hp = Math.ceil(mhpOf(down) * (s.raiseHp || 0.6));
       down.st = []; down.turned = false;
       buildUnitView(down); makeTag(down);
       playFX(s.fx, u, down);
@@ -1214,8 +1283,33 @@ async function useSkill(u, id, a) {
   play(u, A.idle);
 }
 
-/* ── 延遲技能（隕石）與光環 ── */
-let PENDING = [], AURAS = [];
+/* ── 延遲技能（隕石）、光環、持續地塊 ── */
+let PENDING = [], AURAS = [], FIELDS = [];
+
+// 一個持續地塊結算一次：範圍內敵人吃傷害＋刷新狀態，範圍內友軍回血＋刷新增益
+async function fieldHit(p) {
+  const u = byId(p.uid);
+  if (!u) return;
+  if (p.pct) for (const o of enemiesIn(u, p.x, p.y, p.r).slice())
+    await hit(u, o, { pct: p.pct, st: p.st || [] }, { noFlank: 1, aoe: 1 });
+  else if (p.st) for (const o of enemiesIn(u, p.x, p.y, p.r).slice())
+    for (const e of p.st) addSt(o, u, e);
+  if (p.heal || p.give) for (const o of alliesIn(u, p.x, p.y, p.r)) {
+    if (p.heal) healUnit(u, o, Math.round(atkOf(u) * p.heal));
+    for (const e of (p.give || [])) addSt(o, u, e);
+  }
+}
+
+// 每個「本方」的回合開始時，本方放的地塊結算一次並倒數
+async function tickFields(side) {
+  for (let i = FIELDS.length - 1; i >= 0; i--) {
+    const p = FIELDS[i];
+    if (p.side !== side) continue;
+    if (--p.turns <= 0) { FIELDS.splice(i, 1); continue; }
+    await fieldHit(p);
+  }
+  refreshFields();
+}
 
 async function resolvePending(side) {
   for (let i = PENDING.length - 1; i >= 0; i--) {
@@ -1294,6 +1388,7 @@ async function startTurn(side) {
   tickAuras(side);
   for (const u of alive().slice()) if (u.side === side) await tickStatus(u);
   await resolvePending(side);
+  await tickFields(side);
   if (G.over) return;
 
   dimDone(); refreshTop(); refreshRoster();
@@ -1450,7 +1545,7 @@ function newGame(seed, picks) {
   G.bagPhase = null;                                  // 不在背包回合時是 null
   G.news = [0, 0];                                    // 有沒有沒看過的新掉落
   G.picks = picks || [CLS_ORDER.slice(0, TEAM_SIZE), CLS_ORDER.slice(0, TEAM_SIZE)];
-  PENDING = []; AURAS = []; bookSeq = 0;
+  PENDING = []; AURAS = []; FIELDS = []; bookSeq = 0;
   uidSeq = 0; itemSeq = 0; wakeSeq = 0;
   sel = null; phase = 'idle'; preMove = null; busy = false; skillMode = null;
   logs.length = 0;
