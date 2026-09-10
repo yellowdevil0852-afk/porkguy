@@ -5442,45 +5442,54 @@ const ST = {
   root:   { n: '定身', ctrl: 1, d: '不能移動' },
   silence:{ n: '沉默', ctrl: 1, d: '不能使用技能' },
   freeze: { n: '冰凍', ctrl: 1, d: '不能行動，且受到的傷害 +50%' },
-  fear:   { n: '恐懼', ctrl: 1, d: '強制遠離施術者，且不能攻擊' }
+  fear:   { n: '恐懼', ctrl: 1, d: '強制遠離施術者，且不能攻擊' },
+  taunt:  { n: '嘲諷', ctrl: 1, d: '下一回合只能攻擊嘲諷來源' },
+  disarm: { n: '繳械', d: '不能使用普通攻擊' },
+  slow:   { n: '減速', d: '移動力下降' },
+  guarded:{ n: '護衛', good: 1, d: '受到的部分傷害改由守護者承擔' },
+  mitig:  { n: '絕對防禦', good: 1, d: '受到的傷害直接減少一個百分比' },
+  immune: { n: '無敵', good: 1, d: '免疫所有傷害' },
+  rip:    { n: '反擊架式', good: 1, d: '反擊傷害提升' }
 };
 
 const s = (id, pct, turns, val) => ({ id, pct, turns, val });
 
 const SK = {
   /* ───────── 騎士 ───────── */
-  kn_smite:   { n:'猛擊', q:0, c:'KN', k:'single', pct:1.5, cd:2, rng:1, fx:'slash',
-                d:'單體重擊。' },
-  kn_bash:    { n:'盾牆突擊', q:0, c:'KN', k:'single', pct:1.1, cd:2, rng:1, noCounter:1, fx:'bash',
-                d:'撞上去，攻擊後不會被反擊。' },
-  kn_sweep:   { n:'掃腿', q:0, c:'KN', k:'fan', pct:0.75, cd:3, fx:'slash',
-                d:'掃過面向的三格扇形。' },
-  kn_cross:   { n:'十字斬', q:1, c:'KN', k:'cross', pct:1.0, cd:3, fx:'slash',
-                d:'砍向上下左右四格。' },
-  kn_heavy:   { n:'重擊', q:1, c:'KN', k:'single', pct:1.8, cd:3, rng:1, push:1, fx:'slash',
-                d:'一記重擊把目標打退一格。' },
-  kn_plate:   { n:'重甲精通', q:1, c:'KN', k:'passive', p:{ rangedRes:0.15 },
-                d:'受到的遠程與法術傷害 −15%。' },
-  kn_judge:   { n:'聖裁', q:2, c:'KN', k:'single', pct:2.1, cd:4, rng:1, fx:'holy',
-                self:[s('def',0.4,2)], d:'審判一擊，命中後自身防禦提升。' },
-  kn_vow:     { n:'守護誓約', q:2, c:'KN', k:'buffAround', r:1, cd:4, fx:'ward',
-                give:[s('shield',1.5,3)], self:[s('def',0.3,2)],
-                d:'替周圍一格的友軍張開護盾，自己也更硬。' },
+  kn_smite:   { n:'盾擊', q:0, c:'KN', k:'single', pct:0.9, cd:2, rng:1, fx:'bash',
+                self:[s('def',0.2,1)], d:'單體 90% 傷害，命中後自身堅甲 +20%（1 回合）。' },
+  kn_bash:    { n:'你過來啊', q:0, c:'KN', k:'single', pct:0.6, cd:2, rng:2, fx:'shock',
+                st:[s('taunt',0,1)], d:'60% 傷害並嘲諷目標 1 回合（它下回合只能攻擊你）。' },
+  kn_sweep:   { n:'掃腿', q:0, c:'KN', k:'fan', pct:0.5, cd:3, fx:'slash',
+                st:[{ id:'slow', val:1, turns:1 }], d:'面向三格各 50% 傷害，並使目標減速 −1 格。' },
+  kn_cross:   { n:'護衛', q:1, c:'KN', k:'buffAlly', rng:1, cd:3, fx:'ward',
+                give:[s('shield',0.5,2), { id:'guarded', val:0.3, turns:2 }],
+                d:'指定一格內友軍獲得護盾，2 回合內它受到的 30% 傷害轉給你。' },
+  kn_heavy:   { n:'重甲精通', q:1, c:'KN', k:'passive', p:{ rangedRes:0.15, zocCost:1 },
+                d:'受到的遠程與法術傷害 −15%，相鄰敵人的移動消耗額外 +1 格。' },
+  kn_plate:   { n:'野蠻衝撞', q:1, c:'KN', k:'charge', pct:1.0, len:3, rng:3, cd:3, push:1, fx:'charge',
+                d:'向前衝鋒撞擊首個敵人 100% 傷害並擊退一格，停在它面前。' },
+  kn_judge:   { n:'盾牌打擊', q:2, c:'KN', k:'single', pct:1.5, cd:3, rng:1, fx:'bash',
+                st:[s('root',0,1)], d:'150% 傷害並定身目標 1 回合。' },
+  kn_vow:     { n:'陣地盾牆', q:2, c:'KN', k:'buffAround', r:1, cd:4, fx:'ward',
+                give:[s('shield',1.0,2), s('def',0.2,2)], self:[{ id:'rip', val:0.3, turns:2 }],
+                d:'周圍一格友軍獲得護盾與堅甲，自身反擊傷害 +30%（2 回合）。' },
   kn_iron:    { n:'鋼鐵之軀', q:2, c:'KN', k:'passive', p:{ defPct:0.15, noPush:1 },
                 d:'防禦 +15%，且免疫擊退與拉扯。' },
-  kn_sunder:  { n:'破甲重擊', q:3, c:'KN', k:'single', pct:2.5, cd:4, rng:1, fx:'slash',
-                st:[s('sunder',0.35,3)], d:'砸開對方的護甲。' },
-  kn_whirl:   { n:'迴旋斬', q:3, c:'KN', k:'around', pct:1.65, cd:5, fx:'whirl',
-                d:'橫掃周圍一格的所有敵人。' },
-  kn_thorn:   { n:'復仇之盾', q:3, c:'KN', k:'passive', p:{ retaliate:s('bleed',0.2,2) },
-                d:'每次被近戰攻擊，讓攻擊者流血。' },
-  kn_command: { n:'王者號令', q:4, c:'KN', k:'single', pct:3.2, cd:6, rng:1, fx:'holy',
-                st:[s('stun',0,1)], allyR:1, give:[s('atk',0.5,2)],
-                d:'一擊震暈目標，同時鼓舞周圍一格的友軍。' },
-  kn_bulwark: { n:'聖盾壁壘', q:4, c:'KN', k:'around', pct:2.0, cd:6, fx:'shock',
-                st:[s('root',0,1)], d:'盾牆一震，周圍的敵人全部被定住。' },
+  kn_sunder:  { n:'咆哮獅吼', q:3, c:'KN', k:'frontbox', pct:0.4, depth:2, cd:5, fx:'shout',
+                st:[s('taunt',0,2), s('weaken',0.2,2)],
+                d:'前方 3×2 範圍 40% 傷害，並施加嘲諷與虛弱 −20%（2 回合）。' },
+  kn_whirl:   { n:'荊棘之盾', q:3, c:'KN', k:'passive', p:{ retalFlat:1.0, retaliate:s('bleed',0.3,2) },
+                d:'每次被近戰攻擊，反彈相當於自身防禦的固定傷害，並使攻擊者流血 30%（2 回合）。' },
+  kn_thorn:   { n:'破甲重擊', q:3, c:'KN', k:'single', pct:1.8, cd:4, rng:1, fx:'slash',
+                st:[s('sunder',0.3,2)], d:'180% 傷害並破甲 −30%（2 回合）。' },
+  kn_command: { n:'不朽堡壘', q:4, c:'KN', k:'buffAround', r:3, cd:6, fx:'shock',
+                give:[{ id:'shield', hpPct:0.3, turns:2 }], self:[{ id:'mitig', val:0.3, turns:2 }],
+                d:'周圍 3 格友軍獲得相當於自身最大生命 30% 的護盾，自身減傷 30%（2 回合）。' },
+  kn_bulwark: { n:'聖裁', q:4, c:'KN', k:'single', pct:2.0, cd:4, rng:1, fx:'holy',
+                st:[s('stun',0,1)], d:'200% 傷害並暈眩目標 1 回合。' },
   kn_undying: { n:'不倒之軀', q:4, c:'KN', k:'passive', p:{ lastStand:1 },
-                d:'生命歸零時保留 1 點並獲得堅甲，每場一次。' },
+                d:'生命歸零時保留 1 點並獲得無敵 1 回合，每場一次。' },
 
   /* ───────── 遊俠 ───────── */
   rg_quick:   { n:'快射', q:0, c:'RG', k:'single', rng:0, pct:1.5, cd:2, freeMove:1, fx:'arrow',
@@ -6624,8 +6633,8 @@ function hitFX(t, magic) {
    一個單位身上的狀態統一放在 u.st = [{ id, v, turns, from }]。
    v 是已經換算好的實際數值（傷害／加成／護盾剩餘量），控制類的 v 是 0。 */
 
-// 哪些狀態會直接改數值（sunder / weaken 存負數）
-const ST_STAT = { atk: 'atk', def: 'def', mov: 'mov', weaken: 'atk', sunder: 'def' };
+// 哪些狀態會直接改數值（sunder / weaken / slow 存負數）
+const ST_STAT = { atk: 'atk', def: 'def', mov: 'mov', weaken: 'atk', sunder: 'def', slow: 'mov' };
 const CTRL = ['stun', 'root', 'silence', 'freeze', 'fear'];
 
 function addSt(u, src, e) {
@@ -6639,8 +6648,10 @@ function addSt(u, src, e) {
   let v = 0;
   if (e.pct) v = Math.max(1, Math.round(atkOf(src) * e.pct));
   if (e.val) v = e.val;
+  if (e.hpPct) v = Math.round(mhpOf(src) * e.hpPct);          // 護盾照施術者最大生命算
   if (e.id === 'weaken' || e.id === 'sunder')
     v = -Math.round(Math.max(1, e.id === 'weaken' ? atkOf(u) : defOf(u)) * e.pct);
+  if (e.id === 'slow') v = -(e.val || 1);                     // 減速：直接扣移動格數
   if (e.id === 'curse') v = e.pct;
   const old = u.st.find(x => x.id === e.id);
   if (old && !ST[e.id].dot) { old.v = e.id === 'shield' ? old.v + v : v; old.turns = Math.max(old.turns, e.turns + 1); }
@@ -6654,6 +6665,14 @@ const isCtrl = u => u.st.some(x => CTRL.includes(x.id));
 const canMoveU = u => !hasSt(u, 'stun') && !hasSt(u, 'root') && !hasSt(u, 'freeze');
 const canActU = u => !hasSt(u, 'stun') && !hasSt(u, 'freeze') && !hasSt(u, 'fear');
 const canSkillU = u => canActU(u) && !hasSt(u, 'silence');
+const canAtkU = u => canActU(u) && !hasSt(u, 'disarm');            // 繳械只擋普攻，技能照放
+// 嘲諷：回傳這個單位普攻時被強制鎖定的目標 id（沒有就 null）
+function tauntTid(u) {
+  const t = u.st.find(x => x.id === 'taunt');
+  if (!t) return null;
+  const src = byId(t.from);
+  return src && src.alive ? src.id : null;
+}
 function clearBad(u) {
   u.st = u.st.filter(x => ST[x.id].good);
   updTag(u);
@@ -6679,6 +6698,29 @@ function absorb(u, dmg) {
   return left;
 }
 
+// 統一的「吃下一次傷害」：無敵 → 護盾 → 護衛代傷，回傳真正扣掉的血量。
+// 護衛轉出去的那份可能會把守護者打倒，所以是 async（呼叫端本來就在 async 裡）。
+async function takeDmg(t, dmg, src) {
+  if (hasSt(t, 'immune')) { floatText(t.x, t.y, '無敵', 'up'); return 0; }
+  let real = absorb(t, dmg);
+  const g = t.st.find(x => x.id === 'guarded');
+  if (g && real > 0) {
+    const prot = byId(g.from);
+    if (prot && prot.alive && prot !== t && !hasSt(prot, 'immune')) {
+      const move = Math.round(real * g.v);
+      if (move > 0) {
+        real -= move;
+        const pm = absorb(prot, move);
+        prot.hp -= pm;
+        floatText(prot.x, prot.y, '代 ' + pm, 'dmg');
+        updTag(prot);
+        if (prot.hp <= 0) await die(prot, src || null);
+      }
+    }
+  }
+  return real;
+}
+
 /* ── 回合開始的結算 ── */
 async function tickStatus(u) {
   if (!u.st.length) return;
@@ -6695,6 +6737,7 @@ async function tickStatus(u) {
       if (h > 0) { u.hp += h; floatText(u.x, u.y, '+' + h, 'heal'); }
     }
   }
+  if (dot > 0 && hasSt(u, 'immune')) dot = 0;                  // 無敵連持續傷害也免
   if (dot > 0) {
     u.hp -= dot;
     floatText(u.x, u.y, String(dot), 'dmg');
@@ -6888,7 +6931,11 @@ function dmgCalc(a, d, opt) {
   if (opt.crit) v *= CRIT_MULT;
   v = Math.round(v);
   if (pasOf(d, 'rangedRes') && dmgType(a) !== 'melee') v = Math.round(v * (1 - pasOf(d, 'rangedRes')));
-  if (opt.counter && pasOf(a, 'counterPct')) v = Math.round(v * (1 + pasOf(a, 'counterPct')));
+  const rip = (opt.counter ? pasOf(a, 'counterPct') : 0) + (opt.counter ? stVal(a, 'rip') : 0);
+  if (rip) v = Math.round(v * (1 + rip));
+  // 絕對防禦：走完減傷曲線之後，再直接砍一個百分比（跟堅甲的加防禦不同層）
+  const md = Math.min(0.9, stVal(d, 'mitig'));
+  if (md > 0) v = Math.round(v * (1 - md));
   return Math.max(1, v);
 }
 
@@ -6934,6 +6981,11 @@ function reachOf(u) {
         if (o && o.side !== u.side) continue;
         let tc = ter(nx, ny).cost;
         if (tc > 1 && ter(nx, ny).forest && pasOf(u, 'forest')) tc = 1;   // 疾風步
+        // 重甲精通：站在有這個被動的敵人旁邊，移動消耗 +1
+        if (tc < 90) for (const [ex, ey] of NB8) {
+          const eo = unitAt(nx + ex, ny + ey);
+          if (eo && eo.side !== u.side && pasOf(eo, 'zocCost')) { tc += 1; break; }
+        }
         const nc = c + tc;
         if (nc > mv) continue;
         const nk = key(nx, ny);
@@ -7259,7 +7311,7 @@ async function openChest(u) {
 }
 
 async function hurt(u, dmg, why) {
-  const d = absorb(u, dmg);
+  const d = await takeDmg(u, dmg, null);
   u.hp -= d;
   floatText(u.x, u.y, String(d), 'dmg');
   if (why) log(`<b>${nameOf(u)}</b> 受到${why} <b>${d}</b> 傷害`);
@@ -7293,7 +7345,7 @@ async function strike(a, d, opt) {
   const tag = (crit ? '暴擊 ' : '') + (charged ? '蓄力 ' : '') +
     (opt.noFlank ? '' : flankName(fm) + (flankName(fm) ? ' ' : ''));
 
-  const real = absorb(d, dmg);
+  const real = await takeDmg(d, dmg, a);
   a.stk = 0;                                        // 狂熱層數用掉了
   d.hp -= real;
   floatText(d.x, d.y, tag + real, crit ? 'crit' : 'dmg');
@@ -7433,6 +7485,9 @@ async function runAction(a) {
 
   if (a.kind === 'attack') {
     const d = byId(a.tid);
+    const lock = tauntTid(u);
+    if (!canAtkU(u)) { toast(nameOf(u) + ' 被繳械，不能普攻'); busy = false; if (myTurn()) select(u); return; }
+    if (lock && d && d.id !== lock) { toast('被嘲諷，這回合只能攻擊嘲諷來源'); busy = false; if (myTurn()) select(u); return; }
     if (d && d.alive) {
       await strike(u, d);
       u.hitOnce = 1;                      // 獵人本能只吃本回合第一次出手
@@ -7453,7 +7508,10 @@ async function runAction(a) {
       faceTile(u, t.x, t.y);
       play(u, A.cast, true);
       await wait(340);
-      const amt = Math.min(healAmt(u), mhpOf(t) - t.hp);
+      // 牧師普攻治療隊友減半（自我治療不減）
+      let raw = healAmt(u);
+      if (u.cls === 'CL' && t !== u) raw = Math.max(1, Math.round(raw / 2));
+      const amt = Math.min(raw, mhpOf(t) - t.hp);
       t.hp += amt;
       floatText(t.x, t.y, '+' + amt, 'heal');
       blessSelf(u, amt);
@@ -7527,7 +7585,7 @@ async function hit(u, t, s, opt) {
   const crit = !opt.noCrit && grng() < critOf(u);
   if (crit) dmg = Math.round(dmg * CRIT_MULT);
 
-  const real = absorb(t, dmg);
+  const real = await takeDmg(t, dmg, u);
   u.stk = 0;
   t.hp -= real;
   floatText(t.x, t.y, (crit ? '暴擊 ' : '') + real, crit ? 'crit' : 'dmg');
@@ -7585,9 +7643,17 @@ async function onHurtPassives(a, d, real, crit, ranged) {
   // 戰鬥狂熱：被打一次疊一層，最多五層
   const st = pasOf(d, 'stackOnHurt');
   if (st && d.alive) d.stk = Math.min(st * 5, (d.stk || 0) + st);
-  // 復仇之盾：被近戰打就讓對方流血
+  // 復仇之盾 / 荊棘之盾：被近戰打就反傷 + 讓對方流血
   const re = pasOf(d, 'retaliate');
   if (re && !ranged && d.alive && a.alive) addSt(a, d, re);
+  const rf = pasOf(d, 'retalFlat');
+  if (rf && !ranged && d.alive && a.alive) {
+    const v = Math.max(1, Math.round(defOf(d) * rf));
+    a.hp -= await takeDmg(a, v, d);
+    floatText(a.x, a.y, String(v), 'dmg');
+    updTag(a);
+    if (a.hp <= 0) await die(a, d);
+  }
 }
 
 // 不倒之軀 / 殉道：血量歸零時的最後掙扎，回傳 true 表示這次沒死成
@@ -7595,7 +7661,7 @@ function lastStandCheck(u) {
   if (u.hp > 0 || !pasOf(u, 'lastStand') || u.usedStand) return false;
   u.usedStand = 1;
   u.hp = 1;
-  addSt(u, u, { id: 'def', pct: 0.8, turns: 2 });
+  addSt(u, u, { id: 'immune', turns: 1 });
   floatText(u.x, u.y, '不倒之軀', 'up');
   playFX('holy', u);
   log(`<b>${nameOf(u)}</b> 撐住了最後一口氣`);
@@ -7673,6 +7739,7 @@ async function useSkill(u, id, a) {
       if (s.spendTurn) tgt.turned = true;
       if (s.rooted) u.moved = true;
       if (s.resetOnKill && dead) u.cds[id] = 0;
+      for (const e of (s.self || [])) addSt(u, u, e);
       break;
     }
     case 'multi': {
@@ -7707,6 +7774,20 @@ async function useSkill(u, id, a) {
     case 'around': {
       cast(A.chop); await wait(240); playFX(s.fx, u);
       for (const o of enemiesIn(u, u.x, u.y, 1).slice()) await hit(u, o, s, { noFlank: 1 });
+      break;
+    }
+    case 'frontbox': {
+      // 面向前方 depth 格深、三格寬的矩形（咆哮獅吼）。FACE 有斜角（0.707），
+      // 要先四捨五入成整數方向格，不然座標算出來是小數，unitAt 一定找不到。
+      cast(A.chop); await wait(240); playFX(s.fx, u);
+      const rf = FACE[u.dir];
+      const fx = Math.round(rf[0]), fy = Math.round(rf[1]);
+      const px = fy, py = -fx, seen = new Set();
+      for (let dp = 1; dp <= (s.depth || 2); dp++)
+        for (let w = -1; w <= 1; w++) {
+          const o = unitAt(u.x + fx * dp + px * w, u.y + fy * dp + py * w);
+          if (o && o.side !== u.side && !seen.has(o.id)) { seen.add(o.id); await hit(u, o, s, { noFlank: 1 }); }
+        }
       break;
     }
     case 'line': {
@@ -7790,6 +7871,7 @@ async function useSkill(u, id, a) {
       playFX('blink', u);
       u.x = tx; u.y = ty; placeUnit(u);
       playFX('blink', u);
+      for (const e of (s.self || [])) addSt(u, u, e);
       await openChest(u);
       break;
     }
@@ -10225,6 +10307,8 @@ function onClick(ev) {
 
   if (u && !sel.acted) {
     const friendly = u.side === sel.side;
+    if (!friendly && !canAtkU(sel)) { toast(nameOf(sel) + ' 被繳械，不能普攻'); return; }
+    if (!friendly && tauntTid(sel) && u.id !== tauntTid(sel)) { toast('被嘲諷，這回合只能攻擊嘲諷來源'); return; }
     const ok = friendly ? (base(sel).healPct && u.hp < mhpOf(u)) : true;
     if (ok) {
       const kind = friendly ? 'heal' : 'attack';
@@ -10462,12 +10546,17 @@ function aiPlan(u) {
         const kill = dmg >= t.hp;
         // 搔癢式的攻擊不值得為它跑過去挨打
         if (dmg < 3 && !kill) continue;
-        const cnt = (!kill && canCounter(u, t)) ? dmgCalc(t, u, {}) : 0;
-        let sc = Math.min(dmg, t.hp) * 10 + (kill ? 70 : 0) - risk - step * 0.3;
-        sc -= cnt * 9 + (cnt / u.hp) * 90;                // 反擊佔自己血量越高越怕
-        if (t.side !== 2) sc += 15;                       // 打敵方英雄比打怪值錢
-        if (cnt >= u.hp) sc -= 300;                       // 會被反擊打死就別去
-        take({ score: sc, action: { kind: 'attack', uid: u.id, tid: t.id, dest: [sx, sy] } });
+        // 繳械不能普攻、嘲諷只能打嘲諷來源時，跳過普攻但技能補刀照舊
+        const lock = tauntTid(u);
+        const canBasic = canAtkU(u) && !(lock && t.id !== lock);
+        if (canBasic) {
+          const cnt = (!kill && canCounter(u, t)) ? dmgCalc(t, u, {}) : 0;
+          let sc = Math.min(dmg, t.hp) * 10 + (kill ? 70 : 0) - risk - step * 0.3;
+          sc -= cnt * 9 + (cnt / u.hp) * 90;              // 反擊佔自己血量越高越怕
+          if (t.side !== 2) sc += 15;                     // 打敵方英雄比打怪值錢
+          if (cnt >= u.hp) sc -= 300;                     // 會被反擊打死就別去
+          take({ score: sc, action: { kind: 'attack', uid: u.id, tid: t.id, dest: [sx, sy] } });
+        }
 
         // 能一擊帶走的話，用技能補刀
         for (const id of (u.act || [])) {

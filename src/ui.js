@@ -1313,6 +1313,8 @@ function onClick(ev) {
 
   if (u && !sel.acted) {
     const friendly = u.side === sel.side;
+    if (!friendly && !canAtkU(sel)) { toast(nameOf(sel) + ' 被繳械，不能普攻'); return; }
+    if (!friendly && tauntTid(sel) && u.id !== tauntTid(sel)) { toast('被嘲諷，這回合只能攻擊嘲諷來源'); return; }
     const ok = friendly ? (base(sel).healPct && u.hp < mhpOf(u)) : true;
     if (ok) {
       const kind = friendly ? 'heal' : 'attack';

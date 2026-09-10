@@ -123,12 +123,17 @@ function aiPlan(u) {
         const kill = dmg >= t.hp;
         // 搔癢式的攻擊不值得為它跑過去挨打
         if (dmg < 3 && !kill) continue;
-        const cnt = (!kill && canCounter(u, t)) ? dmgCalc(t, u, {}) : 0;
-        let sc = Math.min(dmg, t.hp) * 10 + (kill ? 70 : 0) - risk - step * 0.3;
-        sc -= cnt * 9 + (cnt / u.hp) * 90;                // 反擊佔自己血量越高越怕
-        if (t.side !== 2) sc += 15;                       // 打敵方英雄比打怪值錢
-        if (cnt >= u.hp) sc -= 300;                       // 會被反擊打死就別去
-        take({ score: sc, action: { kind: 'attack', uid: u.id, tid: t.id, dest: [sx, sy] } });
+        // 繳械不能普攻、嘲諷只能打嘲諷來源時，跳過普攻但技能補刀照舊
+        const lock = tauntTid(u);
+        const canBasic = canAtkU(u) && !(lock && t.id !== lock);
+        if (canBasic) {
+          const cnt = (!kill && canCounter(u, t)) ? dmgCalc(t, u, {}) : 0;
+          let sc = Math.min(dmg, t.hp) * 10 + (kill ? 70 : 0) - risk - step * 0.3;
+          sc -= cnt * 9 + (cnt / u.hp) * 90;              // 反擊佔自己血量越高越怕
+          if (t.side !== 2) sc += 15;                     // 打敵方英雄比打怪值錢
+          if (cnt >= u.hp) sc -= 300;                     // 會被反擊打死就別去
+          take({ score: sc, action: { kind: 'attack', uid: u.id, tid: t.id, dest: [sx, sy] } });
+        }
 
         // 能一擊帶走的話，用技能補刀
         for (const id of (u.act || [])) {

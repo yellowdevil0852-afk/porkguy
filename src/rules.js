@@ -147,7 +147,11 @@ function dmgCalc(a, d, opt) {
   if (opt.crit) v *= CRIT_MULT;
   v = Math.round(v);
   if (pasOf(d, 'rangedRes') && dmgType(a) !== 'melee') v = Math.round(v * (1 - pasOf(d, 'rangedRes')));
-  if (opt.counter && pasOf(a, 'counterPct')) v = Math.round(v * (1 + pasOf(a, 'counterPct')));
+  const rip = (opt.counter ? pasOf(a, 'counterPct') : 0) + (opt.counter ? stVal(a, 'rip') : 0);
+  if (rip) v = Math.round(v * (1 + rip));
+  // 絕對防禦：走完減傷曲線之後，再直接砍一個百分比（跟堅甲的加防禦不同層）
+  const md = Math.min(0.9, stVal(d, 'mitig'));
+  if (md > 0) v = Math.round(v * (1 - md));
   return Math.max(1, v);
 }
 
@@ -193,6 +197,11 @@ function reachOf(u) {
         if (o && o.side !== u.side) continue;
         let tc = ter(nx, ny).cost;
         if (tc > 1 && ter(nx, ny).forest && pasOf(u, 'forest')) tc = 1;   // 疾風步
+        // 重甲精通：站在有這個被動的敵人旁邊，移動消耗 +1
+        if (tc < 90) for (const [ex, ey] of NB8) {
+          const eo = unitAt(nx + ex, ny + ey);
+          if (eo && eo.side !== u.side && pasOf(eo, 'zocCost')) { tc += 1; break; }
+        }
         const nc = c + tc;
         if (nc > mv) continue;
         const nk = key(nx, ny);
@@ -518,7 +527,7 @@ async function openChest(u) {
 }
 
 async function hurt(u, dmg, why) {
-  const d = absorb(u, dmg);
+  const d = await takeDmg(u, dmg, null);
   u.hp -= d;
   floatText(u.x, u.y, String(d), 'dmg');
   if (why) log(`<b>${nameOf(u)}</b> 受到${why} <b>${d}</b> 傷害`);
@@ -552,7 +561,7 @@ async function strike(a, d, opt) {
   const tag = (crit ? '暴擊 ' : '') + (charged ? '蓄力 ' : '') +
     (opt.noFlank ? '' : flankName(fm) + (flankName(fm) ? ' ' : ''));
 
-  const real = absorb(d, dmg);
+  const real = await takeDmg(d, dmg, a);
   a.stk = 0;                                        // 狂熱層數用掉了
   d.hp -= real;
   floatText(d.x, d.y, tag + real, crit ? 'crit' : 'dmg');
@@ -692,6 +701,9 @@ async function runAction(a) {
 
   if (a.kind === 'attack') {
     const d = byId(a.tid);
+    const lock = tauntTid(u);
+    if (!canAtkU(u)) { toast(nameOf(u) + ' 被繳械，不能普攻'); busy = false; if (myTurn()) select(u); return; }
+    if (lock && d && d.id !== lock) { toast('被嘲諷，這回合只能攻擊嘲諷來源'); busy = false; if (myTurn()) select(u); return; }
     if (d && d.alive) {
       await strike(u, d);
       u.hitOnce = 1;                      // 獵人本能只吃本回合第一次出手
@@ -712,7 +724,10 @@ async function runAction(a) {
       faceTile(u, t.x, t.y);
       play(u, A.cast, true);
       await wait(340);
-      const amt = Math.min(healAmt(u), mhpOf(t) - t.hp);
+      // 牧師普攻治療隊友減半（自我治療不減）
+      let raw = healAmt(u);
+      if (u.cls === 'CL' && t !== u) raw = Math.max(1, Math.round(raw / 2));
+      const amt = Math.min(raw, mhpOf(t) - t.hp);
       t.hp += amt;
       floatText(t.x, t.y, '+' + amt, 'heal');
       blessSelf(u, amt);
@@ -786,7 +801,7 @@ async function hit(u, t, s, opt) {
   const crit = !opt.noCrit && grng() < critOf(u);
   if (crit) dmg = Math.round(dmg * CRIT_MULT);
 
-  const real = absorb(t, dmg);
+  const real = await takeDmg(t, dmg, u);
   u.stk = 0;
   t.hp -= real;
   floatText(t.x, t.y, (crit ? '暴擊 ' : '') + real, crit ? 'crit' : 'dmg');
@@ -844,9 +859,17 @@ async function onHurtPassives(a, d, real, crit, ranged) {
   // 戰鬥狂熱：被打一次疊一層，最多五層
   const st = pasOf(d, 'stackOnHurt');
   if (st && d.alive) d.stk = Math.min(st * 5, (d.stk || 0) + st);
-  // 復仇之盾：被近戰打就讓對方流血
+  // 復仇之盾 / 荊棘之盾：被近戰打就反傷 + 讓對方流血
   const re = pasOf(d, 'retaliate');
   if (re && !ranged && d.alive && a.alive) addSt(a, d, re);
+  const rf = pasOf(d, 'retalFlat');
+  if (rf && !ranged && d.alive && a.alive) {
+    const v = Math.max(1, Math.round(defOf(d) * rf));
+    a.hp -= await takeDmg(a, v, d);
+    floatText(a.x, a.y, String(v), 'dmg');
+    updTag(a);
+    if (a.hp <= 0) await die(a, d);
+  }
 }
 
 // 不倒之軀 / 殉道：血量歸零時的最後掙扎，回傳 true 表示這次沒死成
@@ -854,7 +877,7 @@ function lastStandCheck(u) {
   if (u.hp > 0 || !pasOf(u, 'lastStand') || u.usedStand) return false;
   u.usedStand = 1;
   u.hp = 1;
-  addSt(u, u, { id: 'def', pct: 0.8, turns: 2 });
+  addSt(u, u, { id: 'immune', turns: 1 });
   floatText(u.x, u.y, '不倒之軀', 'up');
   playFX('holy', u);
   log(`<b>${nameOf(u)}</b> 撐住了最後一口氣`);
@@ -932,6 +955,7 @@ async function useSkill(u, id, a) {
       if (s.spendTurn) tgt.turned = true;
       if (s.rooted) u.moved = true;
       if (s.resetOnKill && dead) u.cds[id] = 0;
+      for (const e of (s.self || [])) addSt(u, u, e);
       break;
     }
     case 'multi': {
@@ -966,6 +990,20 @@ async function useSkill(u, id, a) {
     case 'around': {
       cast(A.chop); await wait(240); playFX(s.fx, u);
       for (const o of enemiesIn(u, u.x, u.y, 1).slice()) await hit(u, o, s, { noFlank: 1 });
+      break;
+    }
+    case 'frontbox': {
+      // 面向前方 depth 格深、三格寬的矩形（咆哮獅吼）。FACE 有斜角（0.707），
+      // 要先四捨五入成整數方向格，不然座標算出來是小數，unitAt 一定找不到。
+      cast(A.chop); await wait(240); playFX(s.fx, u);
+      const rf = FACE[u.dir];
+      const fx = Math.round(rf[0]), fy = Math.round(rf[1]);
+      const px = fy, py = -fx, seen = new Set();
+      for (let dp = 1; dp <= (s.depth || 2); dp++)
+        for (let w = -1; w <= 1; w++) {
+          const o = unitAt(u.x + fx * dp + px * w, u.y + fy * dp + py * w);
+          if (o && o.side !== u.side && !seen.has(o.id)) { seen.add(o.id); await hit(u, o, s, { noFlank: 1 }); }
+        }
       break;
     }
     case 'line': {
@@ -1049,6 +1087,7 @@ async function useSkill(u, id, a) {
       playFX('blink', u);
       u.x = tx; u.y = ty; placeUnit(u);
       playFX('blink', u);
+      for (const e of (s.self || [])) addSt(u, u, e);
       await openChest(u);
       break;
     }

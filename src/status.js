@@ -2,8 +2,8 @@
    一個單位身上的狀態統一放在 u.st = [{ id, v, turns, from }]。
    v 是已經換算好的實際數值（傷害／加成／護盾剩餘量），控制類的 v 是 0。 */
 
-// 哪些狀態會直接改數值（sunder / weaken 存負數）
-const ST_STAT = { atk: 'atk', def: 'def', mov: 'mov', weaken: 'atk', sunder: 'def' };
+// 哪些狀態會直接改數值（sunder / weaken / slow 存負數）
+const ST_STAT = { atk: 'atk', def: 'def', mov: 'mov', weaken: 'atk', sunder: 'def', slow: 'mov' };
 const CTRL = ['stun', 'root', 'silence', 'freeze', 'fear'];
 
 function addSt(u, src, e) {
@@ -17,8 +17,10 @@ function addSt(u, src, e) {
   let v = 0;
   if (e.pct) v = Math.max(1, Math.round(atkOf(src) * e.pct));
   if (e.val) v = e.val;
+  if (e.hpPct) v = Math.round(mhpOf(src) * e.hpPct);          // 護盾照施術者最大生命算
   if (e.id === 'weaken' || e.id === 'sunder')
     v = -Math.round(Math.max(1, e.id === 'weaken' ? atkOf(u) : defOf(u)) * e.pct);
+  if (e.id === 'slow') v = -(e.val || 1);                     // 減速：直接扣移動格數
   if (e.id === 'curse') v = e.pct;
   const old = u.st.find(x => x.id === e.id);
   if (old && !ST[e.id].dot) { old.v = e.id === 'shield' ? old.v + v : v; old.turns = Math.max(old.turns, e.turns + 1); }
@@ -32,6 +34,14 @@ const isCtrl = u => u.st.some(x => CTRL.includes(x.id));
 const canMoveU = u => !hasSt(u, 'stun') && !hasSt(u, 'root') && !hasSt(u, 'freeze');
 const canActU = u => !hasSt(u, 'stun') && !hasSt(u, 'freeze') && !hasSt(u, 'fear');
 const canSkillU = u => canActU(u) && !hasSt(u, 'silence');
+const canAtkU = u => canActU(u) && !hasSt(u, 'disarm');            // 繳械只擋普攻，技能照放
+// 嘲諷：回傳這個單位普攻時被強制鎖定的目標 id（沒有就 null）
+function tauntTid(u) {
+  const t = u.st.find(x => x.id === 'taunt');
+  if (!t) return null;
+  const src = byId(t.from);
+  return src && src.alive ? src.id : null;
+}
 function clearBad(u) {
   u.st = u.st.filter(x => ST[x.id].good);
   updTag(u);
@@ -57,6 +67,29 @@ function absorb(u, dmg) {
   return left;
 }
 
+// 統一的「吃下一次傷害」：無敵 → 護盾 → 護衛代傷，回傳真正扣掉的血量。
+// 護衛轉出去的那份可能會把守護者打倒，所以是 async（呼叫端本來就在 async 裡）。
+async function takeDmg(t, dmg, src) {
+  if (hasSt(t, 'immune')) { floatText(t.x, t.y, '無敵', 'up'); return 0; }
+  let real = absorb(t, dmg);
+  const g = t.st.find(x => x.id === 'guarded');
+  if (g && real > 0) {
+    const prot = byId(g.from);
+    if (prot && prot.alive && prot !== t && !hasSt(prot, 'immune')) {
+      const move = Math.round(real * g.v);
+      if (move > 0) {
+        real -= move;
+        const pm = absorb(prot, move);
+        prot.hp -= pm;
+        floatText(prot.x, prot.y, '代 ' + pm, 'dmg');
+        updTag(prot);
+        if (prot.hp <= 0) await die(prot, src || null);
+      }
+    }
+  }
+  return real;
+}
+
 /* ── 回合開始的結算 ── */
 async function tickStatus(u) {
   if (!u.st.length) return;
@@ -73,6 +106,7 @@ async function tickStatus(u) {
       if (h > 0) { u.hp += h; floatText(u.x, u.y, '+' + h, 'heal'); }
     }
   }
+  if (dot > 0 && hasSt(u, 'immune')) dot = 0;                  // 無敵連持續傷害也免
   if (dot > 0) {
     u.hp -= dot;
     floatText(u.x, u.y, String(dot), 'dmg');
