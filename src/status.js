@@ -22,16 +22,23 @@ function addSt(u, src, e) {
     v = -Math.round(Math.max(1, e.id === 'weaken' ? atkOf(u) : defOf(u)) * e.pct);
   if (e.id === 'slow') v = -(e.val || 1);                     // 減速：直接扣移動格數
   if (e.id === 'curse') v = e.pct;
-  let turns = (e.turns || 1) + 1;
+  // 之前這裡有一個「+1」把每個狀態的實際存活時間都多墊一輪，本來是想
+  // 讓「回合中途上的狀態」也能撐過對方下一回合，但 tickStatus() 永遠是
+  // 那個單位「自己回合開始」才會跑，不管什麼時候中的，最早也是下一次
+  // 輪到自己才會被扣，這個 +1 從來沒有真的需要過，只是白白讓「定身 1
+  // 回合」變成鎖住兩次自己的回合才解除——這才是使用者回報「明明寫 1
+  // 回合，狀態欄卻顯示 3、感覺完全沒倒數」的真正原因（顯示的數字有墊
+  // 過、實際鎖住的時間也真的比技能寫的多一輪，不是倒數機制本身壞掉）。
+  let turns = e.turns || 1;
   // 硬控遞減：短時間內連續中「完全不能行動/移動」的硬控（暈眩/定身/冰凍/
   // 沉默/恐懼——嘲諷、繳械不算，那兩個只是限制打誰/擋普攻），時間減半，
   // 避免好幾個技能接力把同一個角色永遠鎖死動不了。
   if (CTRL.includes(e.id)) {
-    if (hasSt(u, 'resist')) { turns = Math.max(2, Math.ceil((turns - 1) / 2) + 1); floatText(u.x, u.y, '硬控抗性', 'up'); }
+    if (hasSt(u, 'resist')) { turns = Math.max(1, Math.ceil(turns / 2)); floatText(u.x, u.y, '硬控抗性', 'up'); }
     addSt(u, u, { id: 'resist', turns: 2 });
   }
   // 百折不撓：任何負面狀態的持續時間都減半（最少留 1 個實際回合）
-  if (!ST[e.id].good && pasOf(u, 'badDurationHalf')) turns = Math.max(2, Math.ceil((turns - 1) / 2) + 1);
+  if (!ST[e.id].good && pasOf(u, 'badDurationHalf')) turns = Math.max(1, Math.ceil(turns / 2));
   const old = u.st.find(x => x.id === e.id);
   if (old && !ST[e.id].dot) { old.v = e.id === 'shield' ? old.v + v : v; old.turns = Math.max(old.turns, turns); }
   else u.st.push({ id: e.id, v, turns, from: src.id });

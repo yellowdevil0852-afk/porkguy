@@ -5941,6 +5941,27 @@ function placeCamps() {
       CAMPS.push({ id: CAMPS.length, x: mx, y: my, tier, frac, revive: md > NO_REVIVE_R });
     }
   }
+  ensureSafeSpawn();
+}
+
+// 保證每個玩家營地旁邊最近的怪物營地裡，至少有兩群等級落在 4 等以下——
+// 網格抖動本身是隨機的，理論上運氣不好會讓玩家一出生旁邊就是一群啃不動
+// 的高等怪，新手/低等英雄完全無從練起。只調 frac（進而影響 monLvFor()
+// 算出來的等級），不動 tier（怪物種類組成維持原樣，只是等級被壓低）。
+function ensureSafeSpawn() {
+  const maxLv = MON_MAXLV_BY_SIZE[W] || MON_MAXLV_BY_SIZE[32];
+  if (maxLv <= 4) return;                        // 這張地圖本來怪就全部很低級，不用特別處理
+  const minFrac = (maxLv - 4) / (maxLv - 1);      // monLvFor(frac) <= 4 所需的最小 frac
+  for (const spawn of CAMP) {
+    const near = CAMPS.filter(c => Math.abs(c.x - spawn[0]) + Math.abs(c.y - spawn[1]) <= W / 2)
+      .sort((a, b) => (Math.abs(a.x - spawn[0]) + Math.abs(a.y - spawn[1])) -
+                       (Math.abs(b.x - spawn[0]) + Math.abs(b.y - spawn[1])));
+    let ok = near.filter(c => monLvFor(c.frac) <= 4).length;
+    for (const c of near) {
+      if (ok >= 2) break;
+      if (monLvFor(c.frac) > 4) { c.frac = Math.max(c.frac, minFrac); ok++; }
+    }
+  }
 }
 
 function placeChests() {
@@ -6759,16 +6780,23 @@ function addSt(u, src, e) {
     v = -Math.round(Math.max(1, e.id === 'weaken' ? atkOf(u) : defOf(u)) * e.pct);
   if (e.id === 'slow') v = -(e.val || 1);                     // 減速：直接扣移動格數
   if (e.id === 'curse') v = e.pct;
-  let turns = (e.turns || 1) + 1;
+  // 之前這裡有一個「+1」把每個狀態的實際存活時間都多墊一輪，本來是想
+  // 讓「回合中途上的狀態」也能撐過對方下一回合，但 tickStatus() 永遠是
+  // 那個單位「自己回合開始」才會跑，不管什麼時候中的，最早也是下一次
+  // 輪到自己才會被扣，這個 +1 從來沒有真的需要過，只是白白讓「定身 1
+  // 回合」變成鎖住兩次自己的回合才解除——這才是使用者回報「明明寫 1
+  // 回合，狀態欄卻顯示 3、感覺完全沒倒數」的真正原因（顯示的數字有墊
+  // 過、實際鎖住的時間也真的比技能寫的多一輪，不是倒數機制本身壞掉）。
+  let turns = e.turns || 1;
   // 硬控遞減：短時間內連續中「完全不能行動/移動」的硬控（暈眩/定身/冰凍/
   // 沉默/恐懼——嘲諷、繳械不算，那兩個只是限制打誰/擋普攻），時間減半，
   // 避免好幾個技能接力把同一個角色永遠鎖死動不了。
   if (CTRL.includes(e.id)) {
-    if (hasSt(u, 'resist')) { turns = Math.max(2, Math.ceil((turns - 1) / 2) + 1); floatText(u.x, u.y, '硬控抗性', 'up'); }
+    if (hasSt(u, 'resist')) { turns = Math.max(1, Math.ceil(turns / 2)); floatText(u.x, u.y, '硬控抗性', 'up'); }
     addSt(u, u, { id: 'resist', turns: 2 });
   }
   // 百折不撓：任何負面狀態的持續時間都減半（最少留 1 個實際回合）
-  if (!ST[e.id].good && pasOf(u, 'badDurationHalf')) turns = Math.max(2, Math.ceil((turns - 1) / 2) + 1);
+  if (!ST[e.id].good && pasOf(u, 'badDurationHalf')) turns = Math.max(1, Math.ceil(turns / 2));
   const old = u.st.find(x => x.id === e.id);
   if (old && !ST[e.id].dot) { old.v = e.id === 'shield' ? old.v + v : v; old.turns = Math.max(old.turns, turns); }
   else u.st.push({ id: e.id, v, turns, from: src.id });
@@ -9644,7 +9672,9 @@ function showCard(u) {
   $('ucTer').innerHTML = `${t.n}${bits.length ? '（' + bits.join('・') + '）' : ''}` +
     (d.pass ? `<div class="pass">${d.pass}</div>` : '') +
     (pas ? `<div class="pass"><b class="q${pas.q}">${pas.n}</b>：${pas.d}</div>` : '') +
-    (u.st.length ? `<div class="pass st-list">${u.st.map(b2 =>
+    // 硬控抗性（resist）是內部記帳用的機制，不是玩家要理解的東西，跟真正的
+    // 狀態擠在一起顯示只會讓人誤讀成「怎麼還在被控制」，這裡直接濾掉不顯示
+    (u.st.some(b2 => b2.id !== 'resist') ? `<div class="pass st-list">${u.st.filter(b2 => b2.id !== 'resist').map(b2 =>
       `<span class="${ST[b2.id].good ? 'st-g' : 'st-b'}">${ST[b2.id].n}（${b2.turns}）</span>`).join('')}</div>` : '');
 
   const eq = $('ucEquip');

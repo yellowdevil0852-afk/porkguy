@@ -188,6 +188,27 @@ function placeCamps() {
       CAMPS.push({ id: CAMPS.length, x: mx, y: my, tier, frac, revive: md > NO_REVIVE_R });
     }
   }
+  ensureSafeSpawn();
+}
+
+// 保證每個玩家營地旁邊最近的怪物營地裡，至少有兩群等級落在 4 等以下——
+// 網格抖動本身是隨機的，理論上運氣不好會讓玩家一出生旁邊就是一群啃不動
+// 的高等怪，新手/低等英雄完全無從練起。只調 frac（進而影響 monLvFor()
+// 算出來的等級），不動 tier（怪物種類組成維持原樣，只是等級被壓低）。
+function ensureSafeSpawn() {
+  const maxLv = MON_MAXLV_BY_SIZE[W] || MON_MAXLV_BY_SIZE[32];
+  if (maxLv <= 4) return;                        // 這張地圖本來怪就全部很低級，不用特別處理
+  const minFrac = (maxLv - 4) / (maxLv - 1);      // monLvFor(frac) <= 4 所需的最小 frac
+  for (const spawn of CAMP) {
+    const near = CAMPS.filter(c => Math.abs(c.x - spawn[0]) + Math.abs(c.y - spawn[1]) <= W / 2)
+      .sort((a, b) => (Math.abs(a.x - spawn[0]) + Math.abs(a.y - spawn[1])) -
+                       (Math.abs(b.x - spawn[0]) + Math.abs(b.y - spawn[1])));
+    let ok = near.filter(c => monLvFor(c.frac) <= 4).length;
+    for (const c of near) {
+      if (ok >= 2) break;
+      if (monLvFor(c.frac) > 4) { c.frac = Math.max(c.frac, minFrac); ok++; }
+    }
+  }
 }
 
 function placeChests() {
