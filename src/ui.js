@@ -368,7 +368,8 @@ function showCard(u) {
   $('ucDef').textContent = defOf(u);
   $('ucMov').textContent = movOf(u);
   $('ucRng').textContent = rngOf(u);
-  $('ucType').innerHTML = `<span class="tt">${DMG_N[d.dmg]}</span>攻擊　<span class="tt">${ARM_N[d.arm]}</span>`;
+  const mitPct = Math.round(defOf(u) / (MIT_K + defOf(u)) * 100);   // 防禦換算成實際減傷百分比，公式跟 dmgCalc() 的減傷曲線同一條
+  $('ucType').innerHTML = `<span class="tt">${DMG_N[d.dmg]}</span>攻擊　<span class="tt">${ARM_N[d.arm]}</span>　防禦減傷 ${mitPct}%`;
   const t = ter(u.x, u.y);
   const bits = [];
   if (t.def) bits.push('防' + (t.def > 0 ? '+' : '') + t.def);
@@ -1288,18 +1289,23 @@ function tileInfo(x, y) {
   }
   return rows.join('<br>');
 }
+let tileTipAt = null;   // 彈出當下滑鼠的螢幕座標，滑鼠移動超過一個範圍才收掉
 function showTileTip(x, y, cx, cy) {
   const el = $('tileTip');
   el.innerHTML = tileInfo(x, y);
   el.classList.remove('hide');
   el.style.left = Math.max(8, Math.min(uiW() - el.offsetWidth - 8, cx / uiK() + 14)) + 'px';
   el.style.top = Math.max(8, Math.min(uiH() - el.offsetHeight - 8, cy / uiK() + 14)) + 'px';
+  tileTipAt = { x: cx, y: cy };
 }
-const hideTileTip = () => $('tileTip').classList.add('hide');
+function hideTileTip() { $('tileTip').classList.add('hide'); tileTipAt = null; }
+// 滑鼠離彈出當下的位置太遠才收掉——原本滑鼠隨便動一點點（甚至沒真的移動、
+// 只是同一格內晃一下）就會被收掉，等於幾乎看不到
+const TILE_TIP_RANGE = 50;
 
 let hoverUnit = null, hover = null;
 function onHover(ev) {
-  hideTileTip();
+  if (tileTipAt && Math.hypot(ev.clientX - tileTipAt.x, ev.clientY - tileTipAt.y) > TILE_TIP_RANGE) hideTileTip();
   const t = pickTile(ev);
   const moved = !hover || !t || hover[0] !== t[0] || hover[1] !== t[1];
   hover = t;
@@ -1358,6 +1364,7 @@ function onClick(ev) {
     if ((s.k === 'line' || s.k === 'wave' || s.k === 'charge') && x !== sel.x && y !== sel.y) { toast('這個技能只能打直線'); return; }
     if (K_EMPTY.includes(s.k) && (u || ter(x, y).cost > 90)) { toast('要選空地'); return; }
     if (K_ENEMY.includes(s.k) && (!u || u.side === sel.side)) { toast('要選敵人'); return; }
+    if (K_ENEMY.includes(s.k) && s.k !== 'rand' && u && smokeBlocks(sel, u)) { toast('目標被煙霧擋住，遠程鎖定不到'); return; }
     if (K_ALLY.includes(s.k) && (!u || u.side !== sel.side)) { toast('要選友軍'); return; }
     skillMode = null;
     send(a);
@@ -1377,6 +1384,7 @@ function onClick(ev) {
     const friendly = u.side === sel.side;
     if (!friendly && !canAtkU(sel)) { toast(nameOf(sel) + ' 被繳械，不能普攻'); return; }
     if (!friendly && tauntTid(sel) && u.id !== tauntTid(sel)) { toast('被嘲諷，這回合只能攻擊嘲諷來源'); return; }
+    if (!friendly && smokeBlocks(sel, u)) { toast('目標被煙霧擋住，遠程鎖定不到'); return; }
     const ok = friendly ? (base(sel).healPct && u.hp < mhpOf(u)) : true;
     if (ok) {
       const kind = friendly ? 'heal' : 'attack';

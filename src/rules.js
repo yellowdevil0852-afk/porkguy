@@ -65,6 +65,9 @@ function statOf(u, k) {
   if (isHero(u)) {
     if (k === 'hp' && pasOf(u, 'hpPct')) v = Math.round(v * (1 + pasOf(u, 'hpPct')));
     if (k === 'def' && pasOf(u, 'defPct')) v = Math.round(v * (1 + pasOf(u, 'defPct')));
+    // 百折不撓：身上有任何負面狀態時額外加防禦
+    if (k === 'def' && pasOf(u, 'defWhileDebuffed') && u.st.some(x => !ST[x.id].good))
+      v = Math.round(v * (1 + pasOf(u, 'defWhileDebuffed')));
     if (k === 'mov') v += pasOf(u, 'mov');
     if (k === 'rng') v += pasOf(u, 'rng');
   }
@@ -535,6 +538,7 @@ async function hurt(u, dmg, why) {
   u.hp -= d;
   floatText(u.x, u.y, String(d), 'dmg');
   if (why) log(`<b>${nameOf(u)}</b> 受到${why} <b>${d}</b> 傷害`);
+  lowHpProcCheck(u);
   updTag(u);
   if (u.hp > 0) play(u, A.hit, true);
   await wait(160);
@@ -557,7 +561,7 @@ async function strike(a, d, opt) {
   const crit = !opt.noCrit && grng() < critOf(a);
   const fm = flankMult(a, d);
   const charged = !!a.charged;       // 競技場的蓄力地塊：下一次普通攻擊打完就消耗掉
-  const dmg = dmgCalc(a, d, { crit, mult: (opt.mult || 1) * (charged ? 1.5 : 1), noFlank: opt.noFlank });
+  const dmg = dmgCalc(a, d, { crit, mult: (opt.mult || 1) * (charged ? 1.3 : 1), noFlank: opt.noFlank });
   if (charged) {
     a.charged = false;
     addSt(a, a, { id: 'weaken', pct: 0.3, turns: 2 });
@@ -569,6 +573,7 @@ async function strike(a, d, opt) {
   a.stk = 0;                                        // 狂熱層數用掉了
   d.hp -= real;
   floatText(d.x, d.y, tag + real, crit ? 'crit' : 'dmg');
+  lowHpProcCheck(d);
   updTag(d);
 
   const vampPct = affixVal(a, 'vamp');
@@ -813,13 +818,14 @@ async function hit(u, t, s, opt) {
   t.hp -= real;
   floatText(t.x, t.y, (crit ? '暴擊 ' : '') + real, crit ? 'crit' : 'dmg');
   hitFX(t, dmgType(u) === 'magic');
+  lowHpProcCheck(t);
   updTag(t);
   afterDamage(u, t, real);
   await onHurtPassives(u, t, real, crit, dmgType(u) !== 'melee');
   // 技能傷害原本沒有結仇，法師一顆火球把整群怪炸醒不了一個 —— 補上跟普攻一樣的規則
   if (t.side === 2 && t.alive) wakeCamp(t);
 
-  for (const e of (s.st || [])) addSt(t, u, e);
+  if (!s.stChance || grng() < s.stChance) for (const e of (s.st || [])) addSt(t, u, e);
   const ae = pasOf(u, 'aoeDebuff');
   if (ae && opt.aoe) addSt(t, u, ae);
 
@@ -889,6 +895,18 @@ async function onHurtPassives(a, d, real, crit, ranged) {
   }
 }
 
+// 求生本能：生命跌破 30% 就立刻給一層護盾＋迅捷，借用 u.cds 存一個假的
+// 技能 id 當內部冷卻，跟被動本身共用同一個「回合開始遞減」機制
+function lowHpProcCheck(u) {
+  if (!u.alive || u.hp <= 0 || !pasOf(u, 'lowHpProc')) return;
+  if (u.hp / mhpOf(u) >= 0.3) return;
+  if (u.cds.__lowhp > 0) return;
+  u.cds.__lowhp = 8;
+  addSt(u, u, { id: 'shield', pct: 0.5, turns: 1 });
+  addSt(u, u, { id: 'mov', val: 1, turns: 1 });
+  floatText(u.x, u.y, '求生本能', 'up');
+}
+
 // 不倒之軀 / 殉道：血量歸零時的最後掙扎，回傳 true 表示這次沒死成
 function lastStandCheck(u) {
   if (u.hp > 0 || !pasOf(u, 'lastStand') || u.usedStand) return false;
@@ -951,6 +969,11 @@ function pushUnit(t, fx, fy, n) {
 const inSquare = (a, cx, cy, r) => Math.max(Math.abs(a.x - cx), Math.abs(a.y - cy)) <= r;
 const enemiesIn = (u, cx, cy, r) => alive().filter(o => o.side !== u.side && inSquare(o, cx, cy, r));
 const alliesIn = (u, cx, cy, r) => alive().filter(o => o.side === u.side && inSquare(o, cx, cy, r));
+
+// 煙霧彈：範圍內的單位不能被「普通攻擊」或「選取單一目標」的遠程技能鎖定
+// （近戰站到面前照打，AOE／地塊技能也不受影響——煙霧只擋「指名道姓」的遠程攻擊）
+const inSmoke = (x, y) => FIELDS.some(f => f.untargetable && inSquare({ x, y }, f.x, f.y, f.r));
+const smokeBlocks = (a, t) => dmgType(a) !== 'melee' && inSmoke(t.x, t.y);
 
 /* ── 技能執行 ── */
 
@@ -1088,10 +1111,11 @@ async function useSkill(u, id, a) {
       playFX(s.fx, u, { x: tx, y: ty });
       ringFX(tx, ty, s.fx === 'ice' ? 0x8fe6ff : 0xff7a20, TILE * (s.r * 2 + 1), 0.7);
       FIELDS.push({ x: tx, y: ty, r: s.r, pct: s.pct || 0, st: s.st || null, give: s.give || null,
-        heal: s.heal || 0, fx: s.fx, n: s.n, side: u.side, uid: u.id, turns: (s.turns || 2) + 1 });
+        heal: s.heal || 0, fx: s.fx, n: s.n, untargetable: s.untargetable, side: u.side, uid: u.id,
+        turns: (s.turns || 2) + 1 });
       refreshFields();
-      // 施放當下先結算一次，不然要等對方回合才有效果
-      await fieldHit(FIELDS[FIELDS.length - 1]);
+      // 煙霧彈這種純視覺阻擋、沒有傷害/治療的地塊，不用跑 fieldHit()
+      if (s.pct || s.heal || s.give) await fieldHit(FIELDS[FIELDS.length - 1]);
       break;
     }
     case 'pick': {
@@ -1149,6 +1173,7 @@ async function useSkill(u, id, a) {
       playFX('blink', u);
       u.x = tx; u.y = ty; placeUnit(u);
       playFX('blink', u);
+      if (s.cleanseIds) u.st = u.st.filter(x => !s.cleanseIds.includes(x.id));
       for (const e of (s.self || [])) addSt(u, u, e);
       await openChest(u);
       break;
@@ -1194,6 +1219,7 @@ async function useSkill(u, id, a) {
       cast(); await wait(260);
       playFX(s.fx, u, t);
       healUnit(u, t, skillAmt(u, s));
+      if (s.cleanseIds) t.st = t.st.filter(x => !s.cleanseIds.includes(x.id));
       if (s.freeAct) u.acted = false;
       break;
     }
@@ -1224,14 +1250,20 @@ async function useSkill(u, id, a) {
     case 'buffSelf': {
       play(u, A.cheer, true); await wait(300);
       playFX(s.fx, u);
-      // 狂暴：先付出當前生命的一個比例當代價
+      // 狂暴／興奮劑：先付出當前生命的一個比例當代價
       if (s.hpCost) {
         const c = Math.max(1, Math.floor(u.hp * s.hpCost));
         u.hp = Math.max(1, u.hp - c);
         floatText(u.x, u.y, String(c), 'dmg');
       }
+      if (s.cleanse) { const b = u.st.find(x => !ST[x.id].good); if (b) u.st = u.st.filter(x => x !== b); }
+      if (s.cleanseIds) u.st = u.st.filter(x => !s.cleanseIds.includes(x.id));
+      // 興奮劑：讓身上其他技能的冷卻也往下減
+      if (s.cdAllCut) for (const k in u.cds) if (u.cds[k] > 0) u.cds[k] = Math.max(0, u.cds[k] - s.cdAllCut);
       for (const e of (s.self || [])) addSt(u, u, e);
       if (s.killRefresh) u.soloTurn = G.turn;
+      // 凝霜寶珠：換來無敵的代價是這回合不能再動、不能再出手
+      if (s.selfLock) { u.moved = true; u.acted = true; }
       break;
     }
     case 'buffAlly': {
@@ -1468,6 +1500,7 @@ async function monsterPhase() {
     for (const u of alive()) {
       if (u.side === 2) continue;
       if (lock && u.id !== lock) continue;
+      if (smokeBlocks(m, u)) continue;   // 遠程怪也一樣鎖不到煙霧裡的目標
       const d = dist(u, m);
       if (d < bd || (d === bd && tgt && u.id < tgt.id)) { bd = d; tgt = u; }
     }

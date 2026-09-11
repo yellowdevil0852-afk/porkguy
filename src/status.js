@@ -30,6 +30,8 @@ function addSt(u, src, e) {
     if (hasSt(u, 'resist')) { turns = Math.max(2, Math.ceil((turns - 1) / 2) + 1); floatText(u.x, u.y, '硬控抗性', 'up'); }
     addSt(u, u, { id: 'resist', turns: 2 });
   }
+  // 百折不撓：任何負面狀態的持續時間都減半（最少留 1 個實際回合）
+  if (!ST[e.id].good && pasOf(u, 'badDurationHalf')) turns = Math.max(2, Math.ceil((turns - 1) / 2) + 1);
   const old = u.st.find(x => x.id === e.id);
   if (old && !ST[e.id].dot) { old.v = e.id === 'shield' ? old.v + v : v; old.turns = Math.max(old.turns, turns); }
   else u.st.push({ id: e.id, v, turns, from: src.id });
@@ -79,6 +81,9 @@ function absorb(u, dmg) {
 // 護衛轉出去的那份可能會把守護者打倒，所以是 async（呼叫端本來就在 async 裡）。
 async function takeDmg(t, dmg, src) {
   if (hasSt(t, 'immune')) { floatText(t.x, t.y, '無敵', 'up'); return 0; }
+  // 閃避：只擋下一次，不管這下打多重都算「用掉了」
+  const ev = t.st.find(x => x.id === 'evade');
+  if (ev) { dmg = Math.round(dmg * (1 - ev.v)); t.st = t.st.filter(x => x !== ev); }
   let real = absorb(t, dmg);
   const g = t.st.find(x => x.id === 'guarded');
   if (g && real > 0) {
@@ -118,6 +123,7 @@ async function tickStatus(u) {
   if (dot > 0) {
     u.hp -= dot;
     floatText(u.x, u.y, String(dot), 'dmg');
+    lowHpProcCheck(u);
     updTag(u);
     if (u.hp <= 0) { await die(u, null); return; }
   }

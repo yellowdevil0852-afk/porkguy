@@ -127,6 +127,8 @@ function aiPlan(u) {
           continue;
         }
 
+        if (smokeBlocks(u, t)) continue;   // 煙霧彈：遠程鎖定不到，近戰不受影響
+
         const dmg = dmgCalc(u, t, {});
         const kill = dmg >= t.hp;
         // 搔癢式的攻擊不值得為它跑過去挨打

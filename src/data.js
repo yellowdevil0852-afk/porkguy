@@ -147,7 +147,7 @@ const MON = {
 };
 
 // ── 經驗與升級 ──
-const LV_MAX = 10;
+const LV_MAX = 30;                                // 跟怪物等級上限對齊，不再卡在 10 級
 const XP_NEED = lv => 55 + (lv - 1) * 25;         // Lv1→2 需 55，之後遞增
 const XP_HIT = 12, XP_KILL_PC = 55, XP_HEAL = 14, XP_CNT = 8;
 const XP_SHARE = 0.4, XP_SHARE_R = 3;             // 幾格內的隊友分多少經驗

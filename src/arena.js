@@ -16,7 +16,7 @@ const ARENA_BUFF_KINDS = ['power', 'charge', 'guard', 'haste'];
 const ARENA_BUFF_N = { power: '力量增幅', charge: '蓄力', guard: '守護', haste: '迅捷' };
 const ARENA_BUFF_D = {
   power: '攻擊 +20%，持續 3 回合',
-  charge: '下一次普通攻擊 +50% 傷害，打出去就消耗掉',
+  charge: '下一次普通攻擊 +30% 傷害，打出去就消耗掉',
   guard: '獲得一層護盾，持續 3 回合',
   haste: '移動 +2，持續 2 回合'
 };
@@ -241,7 +241,7 @@ async function pickupArenaBuff(u) {
     log(`<span class="s${u.side}">${nameOf(u)}</span> 撿到「力量增幅」，攻擊 +20%（3 回合）`);
   } else if (kind === 'charge') {
     u.charged = true;
-    log(`<span class="s${u.side}">${nameOf(u)}</span> 撿到「蓄力」，下一次普通攻擊 +50% 傷害`);
+    log(`<span class="s${u.side}">${nameOf(u)}</span> 撿到「蓄力」，下一次普通攻擊 +30% 傷害`);
   } else if (kind === 'guard') {
     addSt(u, u, { id: 'shield', pct: 1.5, turns: 3 });
     log(`<span class="s${u.side}">${nameOf(u)}</span> 撿到「守護」，獲得一層護盾（3 回合）`);
