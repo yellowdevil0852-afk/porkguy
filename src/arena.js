@@ -20,6 +20,8 @@ const ARENA_BUFF_D = {
   guard: '獲得一層護盾，持續 3 回合',
   haste: '移動 +2，持續 2 回合'
 };
+// 地上光環顏色，四種各自不同色，跟 tooltip/浮字用同一套顏色（見 skillCol 相關 UI）
+const ARENA_BUFF_COL = { power: 0xffcf5c, charge: 0xb07dff, guard: 0x5ce0ff, haste: 0x5cff8c };
 let ARENA_BUFFS = {};   // key 'x,y' -> 種類
 
 function arenaSpawns() {

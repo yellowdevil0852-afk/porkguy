@@ -588,7 +588,7 @@ function refreshFields() {
   }
 }
 
-// 競技場的一次性增益地塊：金色是力量增幅、紫色是蓄力，撿走就從畫面上消失
+// 競技場的一次性增益地塊：四種各自不同色（見 ARENA_BUFF_COL），撿走就從畫面上消失
 let arenaBuffGroup = null;
 function refreshArenaBuffTiles() {
   if (arenaBuffGroup) fxGroup.remove(arenaBuffGroup);
@@ -596,7 +596,7 @@ function refreshArenaBuffTiles() {
   fxGroup.add(arenaBuffGroup);
   for (const key in ARENA_BUFFS) {
     const [x, y] = key.split(',').map(Number);
-    const col = ARENA_BUFFS[key] === 'power' ? 0xffcf5c : 0xb07dff;
+    const col = ARENA_BUFF_COL[ARENA_BUFFS[key]];
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(TILE * 0.28, TILE * 0.4, 20),
       new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.8,

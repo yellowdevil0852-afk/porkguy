@@ -5157,10 +5157,10 @@ const HIGH_GROUND = 2;                   // 高處往低處打的加成
 // 「怎麼打都只剩地板值 1」，攻防差距一大，戰鬥就從「打幾下」退化成「碰一下就死」。
 // 減傷曲線讓防禦永遠有效但永遠不會把傷害壓到底，全等級的交手節奏才會穩定在 3～5 下。
 // 18 是等級上限還是 10 時調的；等級上限拉到 30 之後（LV_GAIN.def 加上
-// 60 點自由分配、裝備、轉職加成疊起來）防禦動輒 60~90，減傷變成
-// 76~84%，太誇張——調成 40，同樣的防禦範圍落在 60~70%，防禦還是很有
-// 感，但不會打不動。
-const MIT_K = 40;
+// 60 點自由分配、裝備、轉職加成疊起來）防禦動輒 60~90，減傷一度飆到
+// 76~84%。中間試過 40（60~70%），使用者最後拍板要更平的曲線，改成
+// 100：同樣防禦範圍落在 29~49%，防禦不再是後期近乎無敵的手段。
+const MIT_K = 100;
 
 // ── 地形 ──
 const TER = {
@@ -6345,7 +6345,7 @@ function refreshFields() {
   }
 }
 
-// 競技場的一次性增益地塊：金色是力量增幅、紫色是蓄力，撿走就從畫面上消失
+// 競技場的一次性增益地塊：四種各自不同色（見 ARENA_BUFF_COL），撿走就從畫面上消失
 let arenaBuffGroup = null;
 function refreshArenaBuffTiles() {
   if (arenaBuffGroup) fxGroup.remove(arenaBuffGroup);
@@ -6353,7 +6353,7 @@ function refreshArenaBuffTiles() {
   fxGroup.add(arenaBuffGroup);
   for (const key in ARENA_BUFFS) {
     const [x, y] = key.split(',').map(Number);
-    const col = ARENA_BUFFS[key] === 'power' ? 0xffcf5c : 0xb07dff;
+    const col = ARENA_BUFF_COL[ARENA_BUFFS[key]];
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(TILE * 0.28, TILE * 0.4, 20),
       new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.8,
@@ -8590,6 +8590,8 @@ const ARENA_BUFF_D = {
   guard: '獲得一層護盾，持續 3 回合',
   haste: '移動 +2，持續 2 回合'
 };
+// 地上光環顏色，四種各自不同色，跟 tooltip/浮字用同一套顏色（見 skillCol 相關 UI）
+const ARENA_BUFF_COL = { power: 0xffcf5c, charge: 0xb07dff, guard: 0x5ce0ff, haste: 0x5cff8c };
 let ARENA_BUFFS = {};   // key 'x,y' -> 種類
 
 function arenaSpawns() {
@@ -10761,7 +10763,7 @@ function bindInput() {
     updCam();
   });
   addEventListener('pointerup', e => {
-    if (down && !dragged && e.target === el) onClick(e);
+    if (down && !dragged && down.btn === 0 && e.target === el) onClick(e);
     down = null;
   });
   el.addEventListener('wheel', e => {

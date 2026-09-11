@@ -1464,7 +1464,7 @@ function bindInput() {
     updCam();
   });
   addEventListener('pointerup', e => {
-    if (down && !dragged && e.target === el) onClick(e);
+    if (down && !dragged && down.btn === 0 && e.target === el) onClick(e);
     down = null;
   });
   el.addEventListener('wheel', e => {
