@@ -378,14 +378,16 @@ function showCard(u) {
   $('ucTer').innerHTML = `${t.n}${bits.length ? '（' + bits.join('・') + '）' : ''}` +
     (d.pass ? `<div class="pass">${d.pass}</div>` : '') +
     (pas ? `<div class="pass"><b class="q${pas.q}">${pas.n}</b>：${pas.d}</div>` : '') +
-    (u.st.length ? `<div class="pass">${u.st.map(b2 => ST[b2.id].n + '（' + b2.turns + '）').join('、')}</div>` : '');
+    (u.st.length ? `<div class="pass st-list">${u.st.map(b2 =>
+      `<span class="${ST[b2.id].good ? 'st-g' : 'st-b'}">${ST[b2.id].n}（${b2.turns}）</span>`).join('')}</div>` : '');
 
   const eq = $('ucEquip');
   if (isHero(u)) {
     eq.classList.remove('hide');
     eq.innerHTML = ['weapon', 'armor', 'trinket'].map(s => {
       const it = u.equip[s];
-      return `<div class="eq${it ? ' r' + it.r : ' empty'}">${SLOT_N[s]}　${it ? itemName(it) + ' <span>' + itemStats(it) + '</span>' : '—'}</div>`;
+      return `<div class="eq${it ? ' r' + it.r : ' empty'}">${SLOT_N[s]}　${it ? itemName(it) + ' <span>' + itemStats(it) + '</span>' : '—'}</div>` +
+        (it && it.affix ? `<div class="eq-af">${affixDesc(it)}</div>` : '');
     }).join('');
   } else eq.classList.add('hide');
 
@@ -453,10 +455,29 @@ function skillInfo(u, id) {
   return '<h5 class="q' + s.q + '">' + s.n + '<em>' + QN[s.q] + '</em></h5><p>' + s.d + '</p>' +
     rows.map(r => '<div class="sr">' + r + '</div>').join('');
 }
+// 裝備說明：品質、部位限制、數值、詞綴（含實際數字）——已裝備在單位身上的
+// 裝備欄也用這個，跟背包清單裡的說明是同一套資料，只是這裡多了品質標題列
+function gearInfo(it) {
+  const only = useHint(it);
+  const af = it.affix ? '<div class="sr" style="color:#5fd39a">' + affixDesc(it) + '</div>' : '';
+  return '<h5 class="q' + it.r + '" style="color:' + RARITY[it.r].col + '">' + itemName(it) +
+    '<em>' + RARITY[it.r].n + '</em></h5>' +
+    '<p>' + SLOT_N[it.slot] + (only ? '　' + only : '') + '</p>' +
+    '<div class="sr">' + itemStats(it) + '</div>' + af;
+}
 let skillTipEl = null;
 function showSkillTip(u, id, el) {
   const t = $('skillTip');
   t.innerHTML = skillInfo(u, id);
+  t.classList.remove('hide');
+  const r = el.getBoundingClientRect();
+  t.style.left = Math.max(8, Math.min(uiW() - t.offsetWidth - 8, r.left / uiK() + r.width / uiK() / 2 - t.offsetWidth / 2)) + 'px';
+  t.style.top = (r.top / uiK() - t.offsetHeight - 10) + 'px';
+  skillTipEl = el;
+}
+function showGearTip(it, el) {
+  const t = $('skillTip');
+  t.innerHTML = gearInfo(it);
   t.classList.remove('hide');
   const r = el.getBoundingClientRect();
   t.style.left = Math.max(8, Math.min(uiW() - t.offsetWidth - 8, r.left / uiK() + r.width / uiK() / 2 - t.offsetWidth / 2)) + 'px';
@@ -773,6 +794,11 @@ function buildCard(u) {
   // 裝備欄：點＝選起來，雙擊或拖回背包＝卸下
   card.querySelectorAll('.eslot').forEach(e => {
     const sl = e.dataset.slot;
+    const it = u.equip[sl];
+    if (it) {
+      e.onpointerenter = () => showGearTip(it, e);
+      e.onpointerleave = hideSkillTip;
+    }
     e.onclick = ev => {
       ev.stopPropagation();
       bagSlot = (bagSlot && bagSlot.uid === u.id && bagSlot.slot === sl) ? null : { uid: u.id, slot: sl };
@@ -1239,8 +1265,8 @@ function pickTile(ev) {
   return best;
 }
 
-// 地塊資訊：地形種類／加成、競技場一次性增益、目前受哪個持續地塊影響——
-// 滑鼠停在同一格 2 秒後才出現，免得平常移動滑鼠時一直閃
+// 地塊資訊：地形種類／加成、競技場一次性增益（含效果說明）、目前受哪個
+// 持續地塊影響——在格子上按一下滑鼠右鍵才出現，滑鼠一移動就收掉
 function tileInfo(x, y) {
   const t = ter(x, y);
   const rows = ['<b>' + t.n + '</b>'];
@@ -1251,10 +1277,10 @@ function tileInfo(x, y) {
   else if (t.cost > 1) bonus.push('移動消耗 ' + t.cost);
   if (t.mire) bonus.push('踏進來就會停下');
   if (t.block) bonus.push('擋視線');
-  if (bonus.length) rows.push(bonus.join('　'));
+  rows.push(bonus.length ? bonus.join('　') : '沒有特殊加成');
   if (G.arena) {
     const kind = ARENA_BUFFS[x + ',' + y];
-    if (kind) rows.push('<span class="tt-buff">地塊增益：' + ARENA_BUFF_N[kind] + '</span>');
+    if (kind) rows.push('<span class="tt-buff">地塊增益：' + ARENA_BUFF_N[kind] + '——' + ARENA_BUFF_D[kind] + '</span>');
   }
   for (const f of FIELDS) {
     if (Math.max(Math.abs(x - f.x), Math.abs(y - f.y)) <= f.r)
@@ -1270,23 +1296,13 @@ function showTileTip(x, y, cx, cy) {
   el.style.top = Math.max(8, Math.min(uiH() - el.offsetHeight - 8, cy / uiK() + 14)) + 'px';
 }
 const hideTileTip = () => $('tileTip').classList.add('hide');
-let tileTipTimer = null;
 
 let hoverUnit = null, hover = null;
 function onHover(ev) {
+  hideTileTip();
   const t = pickTile(ev);
   const moved = !hover || !t || hover[0] !== t[0] || hover[1] !== t[1];
   hover = t;
-  if (moved) {
-    hideTileTip();
-    clearTimeout(tileTipTimer);
-    if (t) {
-      const [tx, ty] = t, cx = ev.clientX, cy = ev.clientY;
-      tileTipTimer = setTimeout(() => {
-        if (hover && hover[0] === tx && hover[1] === ty) showTileTip(tx, ty, cx, cy);
-      }, 2000);
-    }
-  }
   const u = t ? unitAt(t[0], t[1]) : null;
   hoverUnit = u;
   if (skillMode && sel && moved) drawRanges();
@@ -1425,7 +1441,7 @@ function bindInput() {
   el.addEventListener('pointerdown', e => {
     down = { x: e.clientX, y: e.clientY, btn: e.button, az: camAz, el: camEl };
     dragged = false;
-    hideTileTip(); clearTimeout(tileTipTimer);
+    hideTileTip();
   });
   addEventListener('pointermove', e => {
     if (!down) { if (!busy) onHover(e); return; }
@@ -1446,7 +1462,11 @@ function bindInput() {
     camDist = Math.max(10, Math.min(70, camDist + Math.sign(e.deltaY) * 2.2 * (SET.zoomSpeed / 100)));
     updCam();
   }, { passive: false });
-  el.addEventListener('contextmenu', e => e.preventDefault());
+  el.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    const t = pickTile(e);
+    if (t) showTileTip(t[0], t[1], e.clientX, e.clientY);
+  });
 
   $('mm').addEventListener('pointerdown', e => {
     const r = e.target.getBoundingClientRect();

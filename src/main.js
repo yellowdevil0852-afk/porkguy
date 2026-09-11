@@ -48,6 +48,90 @@ function openPick(side, then) {
   paint();
 }
 
+/* ── 開局節奏設定：選完角色、開局前跳出來，調商店/競技場多久出現一次、勝利門檻 ── */
+
+function openPaceConfig(then) {
+  $('menu').classList.remove('hide');
+  ['mMain', 'mNet', 'mWait', 'mPick'].forEach(i => $(i).classList.add('hide'));
+  $('mPace').classList.remove('hide');
+  $('menu').querySelector('.card').classList.add('wide');
+
+  const rangeRow = (label, key, min, max, suffix) => {
+    const d = document.createElement('div');
+    d.className = 'setr';
+    d.innerHTML = `<span class="setl">${label}</span>`;
+    const wrap = document.createElement('div');
+    wrap.className = 'setv';
+    const i = document.createElement('input');
+    i.type = 'range'; i.min = min; i.max = max; i.value = PACE[key];
+    const em = document.createElement('em');
+    em.textContent = PACE[key] + suffix;
+    i.oninput = () => {
+      PACE[key] = +i.value; em.textContent = PACE[key] + suffix;
+      savePace(); drawTimeline();
+    };
+    wrap.appendChild(i); wrap.appendChild(em);
+    d.appendChild(wrap);
+    return d;
+  };
+  const toggleRow = (label, onKey, numKey, min, max, suffix) => {
+    const d = document.createElement('div');
+    d.className = 'setr';
+    d.innerHTML = `<span class="setl">${label}</span>`;
+    const wrap = document.createElement('div');
+    wrap.className = 'setv';
+    const b = document.createElement('button');
+    b.className = 'stg';
+    const i = document.createElement('input');
+    i.type = 'range'; i.min = min; i.max = max; i.value = PACE[numKey];
+    const em = document.createElement('em');
+    const paint = () => { b.textContent = PACE[onKey] ? '開' : '關'; b.classList.toggle('on', !!PACE[onKey]); };
+    paint();
+    em.textContent = PACE[numKey] + suffix;
+    b.onclick = () => { PACE[onKey] = !PACE[onKey]; paint(); savePace(); };
+    i.oninput = () => { PACE[numKey] = +i.value; em.textContent = PACE[numKey] + suffix; savePace(); };
+    wrap.appendChild(b); wrap.appendChild(i); wrap.appendChild(em);
+    d.appendChild(wrap);
+    return d;
+  };
+
+  const rows = $('paceRows');
+  rows.innerHTML = '';
+  rows.appendChild(rangeRow('第一次商店回合', 'shopFirst', 1, 15, ' 回合'));
+  rows.appendChild(rangeRow('商店之後幾回合出現競技場', 'arenaAfterShop', 1, 10, ' 回合'));
+  rows.appendChild(rangeRow('競技場之後幾回合出現商店', 'shopAfterArena', 1, 10, ' 回合'));
+
+  const winRows = $('paceWinRows');
+  winRows.innerHTML = '';
+  winRows.appendChild(toggleRow('佔領王座連續', 'throneOn', 'throneWin', 1, 20, ' 回合獲勝'));
+  winRows.appendChild(toggleRow('累積競技場勝利', 'arenaWinOn', 'arenaWinNeed', 1, 15, ' 場獲勝'));
+
+  function drawTimeline() {
+    const tl = $('paceTimeline');
+    tl.innerHTML = '';
+    const cycle = PACE.arenaAfterShop + PACE.shopAfterArena;
+    const N = Math.min(40, PACE.shopFirst + cycle * 3);
+    for (let t = 1; t <= N; t++) {
+      const a = isArenaTurn(t), s = isShopTurn(t);
+      const chip = document.createElement('span');
+      chip.className = 'paceChip' + (a ? ' pc-a' : s ? ' pc-s' : '');
+      chip.textContent = a ? '⚔' : s ? '🛒' : t;
+      chip.title = '第 ' + t + ' 回合' + (a ? '：競技場回合' : s ? '：商店回合' : '');
+      tl.appendChild(chip);
+    }
+  }
+  drawTimeline();
+
+  $('paceGo').onclick = () => {
+    $('menu').querySelector('.card').classList.remove('wide');
+    then();
+  };
+  $('paceBack').onclick = () => {
+    $('menu').querySelector('.card').classList.remove('wide');
+    $('mPace').classList.add('hide'); $('mMain').classList.remove('hide');
+  };
+}
+
 function startPlay(picks) {
   setSize(mapSize);
   $('menu').classList.add('hide');
@@ -136,6 +220,7 @@ async function boot() {
 
   txt.textContent = '建構世界…';
   loadSettings();
+  loadPace();
   initThree();
   makePortraits();
   initFXTex();
@@ -151,7 +236,7 @@ async function boot() {
   // 本機對戰：藍軍先選，再換紅軍
   $('mLocal').onclick = () => {
     mode = 'local'; myTeam = 0;
-    openPick(0, blue => openPick(1, red => startPlay([blue, red])));
+    openPick(0, blue => openPick(1, red => openPaceConfig(() => startPlay([blue, red]))));
   };
   $('pickGo').onclick = () => { const p = pickSel.slice(); pickThen(p); };
   $('pickBack').onclick = () => {

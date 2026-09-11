@@ -67,10 +67,14 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
 .tt{color:var(--gold)}
 #ucTer{margin-top:7px;padding-top:7px;border-top:1px solid var(--line);font-size:11px;color:var(--dim)}
 .pass{margin-top:4px;color:#9fb4d8}
+.st-list span{margin-right:6px;display:inline-block}
+.st-list .st-g{color:#5fd39a}
+.st-list .st-b{color:#ff6a6a}
 #ucEquip{margin-top:7px;padding-top:7px;border-top:1px solid var(--line);font-size:11px}
 .eq{padding:2px 0;color:var(--dim)}
 .eq span{color:var(--dim);font-size:10px}
 .eq.empty{opacity:.45}
+.eq-af{padding:0 0 2px 12px;color:#5fd39a;font-size:10px}
 
 /* 隊伍列 + 金幣，金幣在上面 */
 #hudLeft{position:absolute;left:10px;bottom:14px;width:170px;display:flex;flex-direction:column;gap:5px}
@@ -373,6 +377,15 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
 .setv{display:flex;align-items:center;gap:4px}
 .setv input[type=range]{width:120px;accent-color:var(--gold)}
 .setv em{font-size:10.5px;color:var(--dim);font-style:normal;width:38px;text-align:right}
+
+/* 開局節奏設定的時間軸預覽 */
+#paceTimelineWrap{border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+  padding:2px 0 8px;margin:4px 0}
+#paceTimeline{display:flex;flex-wrap:wrap;gap:4px}
+.paceChip{min-width:20px;height:20px;padding:0 3px;border-radius:5px;background:#1a2233;
+  color:var(--dim);font-size:11px;display:flex;align-items:center;justify-content:center}
+.paceChip.pc-s{background:#3a3320;color:#e8c168}
+.paceChip.pc-a{background:#3a2020;color:#ff8a6a}
 .spk,.stg{font-size:11px;padding:3px 9px;border-radius:6px}
 .spk.on,.stg.on{border-color:var(--gold);color:var(--gold);background:#241d0d}
 .setrst{width:100%;margin-top:14px;font-size:12px}
@@ -644,6 +657,20 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
       <div id="roomCode">------</div>
       <div class="note" id="mWaitNote">等待對手加入…</div>
       <button class="back" id="mCancelHost">← 取消</button>
+    </div>
+    <div id="mPace" class="col hide">
+      <div class="note" style="margin:0 0 8px">開局節奏設定（雙方共用同一份，只有建立本機對戰的這邊能調）</div>
+      <div id="paceRows"></div>
+      <div id="paceTimelineWrap">
+        <div class="note" style="margin:6px 0 4px">回合時間軸預覽（🛒 商店・⚔ 競技場）</div>
+        <div id="paceTimeline"></div>
+      </div>
+      <div class="note" style="margin:10px 0 4px">勝利條件</div>
+      <div id="paceWinRows"></div>
+      <div class="row">
+        <button class="back" id="paceBack">← 返回</button>
+        <button class="prime" id="paceGo">開始遊戲</button>
+      </div>
     </div>
   </div>
 </div>
@@ -5077,8 +5104,32 @@ let W = 27, H = 27;                      // 地圖邊長，開局時由選單決
 const TILE = 2;
 const SIZES = [16, 32, 64, 96, 128];     // 可選的地圖大小
 let THRONE = [13, 13];                   // 正中央，setSize() 會重算
-const THRONE_WIN = 5;                    // 連續佔領幾回合獲勝
+let THRONE_WIN = 5;                      // 連續佔領幾回合獲勝——開局節奏設定畫面可以調，newGame() 會套用
 const AGGRO = 3;                         // 怪物驚醒距離
+
+// 開局節奏：商店/競技場多久出現一次、勝利條件門檻——開局節奏設定畫面調的
+// 就是這包，本機對戰選完角色之後跳出來讓玩家自己排。
+let PACE = {
+  shopFirst: 3,        // 第一次商店回合
+  arenaAfterShop: 2,   // 商店之後幾回合出現競技場
+  shopAfterArena: 3,   // 競技場之後幾回合出現下一次商店
+  throneOn: true, throneWin: 5,        // 佔領王座連續 N 回合獲勝
+  arenaWinOn: false, arenaWinNeed: 3   // 累積競技場勝利場次獲勝（預設關閉）
+};
+// 這回合是不是該進商店／競技場：從第一次商店回合開始，兩種回合交替出現，
+// 週期＝商店後幾回合到競技場＋競技場後幾回合到商店；不用求最大公因數，
+// 單純各自往後推算即可，兩邊算出來的回合數保證一致（PACE 是雙方同一份設定）。
+function isShopTurn(t) {
+  if (t < PACE.shopFirst) return false;
+  const cycle = PACE.arenaAfterShop + PACE.shopAfterArena;
+  return (t - PACE.shopFirst) % cycle === 0;
+}
+function isArenaTurn(t) {
+  const first = PACE.shopFirst + PACE.arenaAfterShop;
+  if (t < first) return false;
+  const cycle = PACE.arenaAfterShop + PACE.shopAfterArena;
+  return (t - first) % cycle === 0;
+}
 const LEASH = 8;                         // 怪物離營地最遠追多少格
 const REVIVE_TURNS = 3;                  // 英雄倒下後幾回合在營地復活
 const REVIVE_DASH = 2;                   // 復活後兩回合的額外移動力
@@ -5133,7 +5184,7 @@ const ARM_N = { heavy: '重甲', light: '輕甲', cloth: '布甲' };
 const CLS = {
   KN: {
     n: '騎士', pro: '聖殿騎士', model: 'Knight', dmg: 'melee', arm: 'heavy',
-    hp: 34, atk: 11, def: 7, mov: 4, rng: 1,
+    hp: 34, atk: 8, def: 7, mov: 4, rng: 1,
     show: { 1: ['1H_Sword', 'Round_Shield'], 2: ['2H_Sword'] },
     pass: '守護：周圍一格的友軍受到的傷害 −2'
   },
@@ -5202,7 +5253,7 @@ const XP_SHARE = 0.4, XP_SHARE_R = 3;             // 幾格內的隊友分多少
 const LV_GAIN = { hp: 5, atk: 2, def: 1 };
 const FREE_PTS = 2;                               // 每升一級可自由分配的點數
 // 一點自由屬性點換到的東西
-const PT_GAIN = { atk: 1, def: 1, hp: 4 };
+const PT_GAIN = { atk: 1, def: 1, hp: 8 };
 const PT_N = { atk: '攻擊', def: '防禦', hp: '生命' };
 const MON_GAIN = { hp: 4, atk: 1, def: 1 };      // 怪物的等級成長，刻意比英雄慢
 const PROMO_LV = 5, PROMO = { hp: 12, atk: 4, def: 3, mov: 1 };
@@ -5298,6 +5349,18 @@ function loadSettings() {
 }
 function saveSettings() {
   try { localStorage.setItem(SET_KEY, JSON.stringify(SET)); } catch (e) { /* 存不了就算了 */ }
+}
+
+// 開局節奏（商店/競技場多久出現一次、勝利門檻）也存起來，不然每局都要重調
+const PACE_KEY = 'porkguy.pace.v1';
+function loadPace() {
+  try {
+    const raw = localStorage.getItem(PACE_KEY);
+    if (raw) Object.assign(PACE, JSON.parse(raw));
+  } catch (e) { /* 讀不到就用預設 */ }
+}
+function savePace() {
+  try { localStorage.setItem(PACE_KEY, JSON.stringify(PACE)); } catch (e) { /* 存不了就算了 */ }
 }
 function setOpt(k, v) {
   SET[k] = v;
@@ -8183,7 +8246,7 @@ async function startTurn(side) {
   // 王座計數
   const holder = alive().find(u => u.x === THRONE[0] && u.y === THRONE[1] && u.side === side);
   G.hold[side] = holder ? G.hold[side] + 1 : 0;
-  if (G.hold[side] >= THRONE_WIN) { endGame(side, '佔領王座滿 ' + THRONE_WIN + ' 回合'); return; }
+  if (PACE.throneOn && G.hold[side] >= THRONE_WIN) { endGame(side, '佔領王座滿 ' + THRONE_WIN + ' 回合'); return; }
 
   // 倒下的英雄倒數，時間到就在營地重新站起來
   let anyRevived = false;
@@ -8258,8 +8321,8 @@ async function doEndTurn(broadcast) {
   // 走到這裡代表雙方這一輪都結束了——背包回合夾在「所有玩家回合」跟「魔物／
   // 競技場／商店」之間，只在這裡插一次，不是每個人結束回合都插
   const proceed = async () => {
-    if (G.turn % ARENA_INTERVAL === 0) { await enterArena(); return; }
-    if (G.turn % SHOP_INTERVAL === 0) { await enterShop(); return; }
+    if (isArenaTurn(G.turn)) { await enterArena(); return; }
+    if (isShopTurn(G.turn)) { await enterShop(); return; }
     await monsterPhase();
     if (G.over) return;
     G.turn++;
@@ -8380,7 +8443,8 @@ function endGame(side, why) {
 function newGame(seed, picks) {
   G.units.forEach(removeView);
   G.units = []; G.cur = 0; G.turn = 1; G.over = null;
-  G.hold = [0, 0]; G.bag = [[], []]; G.books = [[], []];
+  G.hold = [0, 0]; G.arenaWins = [0, 0]; G.bag = [[], []]; G.books = [[], []];
+  THRONE_WIN = PACE.throneWin;                        // 開局節奏設定畫面調過的話，這裡套用
   G.orbs = [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0]];        // 技能精球
   G.gorbs = [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0]];       // 裝備精球
   G.gold = [0, 0];                                    // 金幣
@@ -8435,21 +8499,27 @@ function newGame(seed, picks) {
 
 /* ───── arena.js ───── */
 /* ══════════════ 競技場 ══════════════
-   每 ARENA_INTERVAL 回合結束時，雙方所有還站著的英雄被強制傳送到一個
-   16×16 的小競技場，打**一場**——先把對方全部打倒的一方獲勝就結束
+   什麼時候開競技場現在由 PACE（data.js，開局節奏設定畫面可以調）決定，
+   見 isArenaTurn()。觸發時雙方所有還站著的英雄被強制傳送到一個 16×16
+   的小競技場，打**一場**——先把對方全部打倒的一方獲勝就結束
    （不是同一輪三戰兩勝；那個規則以後可能會再改，現在先簡單一輪定勝負）。
    結束後所有人回到原本在主戰場的位置，血量統一恢復到上限的一半——
    這樣進競技場才有風險，不是純粹白拿獎勵的小遊戲。
    場上有一次性的增益地塊，走過去就撿到、用掉就消失。地形跟增益地塊
    的位置每次都重新隨機，但兩邊用同一個種子算，畫面會完全一致。 */
 
-const ARENA_INTERVAL = 5;    // 每幾回合結束強制開一次
 const ARENA_SIZE = 16;
 const ARENA_GOLD_WIN = 40, ARENA_GOLD_LOSE = 10;
 
 // 四種一次性增益，撿到立刻生效、從地上消失
 const ARENA_BUFF_KINDS = ['power', 'charge', 'guard', 'haste'];
 const ARENA_BUFF_N = { power: '力量增幅', charge: '蓄力', guard: '守護', haste: '迅捷' };
+const ARENA_BUFF_D = {
+  power: '攻擊 +20%，持續 3 回合',
+  charge: '下一次普通攻擊 +50% 傷害，打出去就消耗掉',
+  guard: '獲得一層護盾，持續 3 回合',
+  haste: '移動 +2，持續 2 回合'
+};
 let ARENA_BUFFS = {};   // key 'x,y' -> 種類
 
 function arenaSpawns() {
@@ -8611,7 +8681,13 @@ async function exitArena(winnerSide) {
   log(`<b class="s${winnerSide}">${SIDE_N[winnerSide]}</b> 贏得競技場！`);
   giveGold(0, winnerSide === 0 ? ARENA_GOLD_WIN : ARENA_GOLD_LOSE);
   giveGold(1, winnerSide === 1 ? ARENA_GOLD_WIN : ARENA_GOLD_LOSE);
+  G.arenaWins[winnerSide]++;
   toast(`競技場結束，<b class="s${winnerSide}">${SIDE_N[winnerSide]}</b>獲勝！雙方都拿到了金幣`);
+  if (PACE.arenaWinOn && G.arenaWins[winnerSide] >= PACE.arenaWinNeed) {
+    await wait(700);
+    endGame(winnerSide, '競技場累積勝利 ' + PACE.arenaWinNeed + ' 場');
+    return;
+  }
   await wait(700);
 
   const { saved, participants } = G.arena;
@@ -8724,13 +8800,13 @@ async function arenaBanner() {
 
 /* ───── shop.js ───── */
 /* ══════════════ 商店 ══════════════
-   每 SHOP_INTERVAL 回合結束，開一次商店：5 件商品依品質由低到高依序拍賣，
+   什麼時候開商店現在由 PACE（data.js，開局節奏設定畫面可以調）決定，
+   見 isShopTurn()。觸發時開一次商店：5 件商品依品質由低到高依序拍賣，
    保底一件金色。回合制競標——不是即時倒數，雙方輪流「加價」或「放棄」，
    這樣完全不用處理「兩人同時出價」這種需要一個公正裁判才能判定的情況，
    P2P 對等連線沒有這種裁判角色。
    加價門檻跟著品質走：白 10、綠 20、藍 30、紫 40、金 50。 */
 
-const SHOP_INTERVAL = 3;
 const SHOP_MIN_RAISE = q => (q + 1) * 10;
 
 // 商店賣的技能不分邊——只要兩隊當中有人的職業學得會就算數，
@@ -9529,14 +9605,16 @@ function showCard(u) {
   $('ucTer').innerHTML = `${t.n}${bits.length ? '（' + bits.join('・') + '）' : ''}` +
     (d.pass ? `<div class="pass">${d.pass}</div>` : '') +
     (pas ? `<div class="pass"><b class="q${pas.q}">${pas.n}</b>：${pas.d}</div>` : '') +
-    (u.st.length ? `<div class="pass">${u.st.map(b2 => ST[b2.id].n + '（' + b2.turns + '）').join('、')}</div>` : '');
+    (u.st.length ? `<div class="pass st-list">${u.st.map(b2 =>
+      `<span class="${ST[b2.id].good ? 'st-g' : 'st-b'}">${ST[b2.id].n}（${b2.turns}）</span>`).join('')}</div>` : '');
 
   const eq = $('ucEquip');
   if (isHero(u)) {
     eq.classList.remove('hide');
     eq.innerHTML = ['weapon', 'armor', 'trinket'].map(s => {
       const it = u.equip[s];
-      return `<div class="eq${it ? ' r' + it.r : ' empty'}">${SLOT_N[s]}　${it ? itemName(it) + ' <span>' + itemStats(it) + '</span>' : '—'}</div>`;
+      return `<div class="eq${it ? ' r' + it.r : ' empty'}">${SLOT_N[s]}　${it ? itemName(it) + ' <span>' + itemStats(it) + '</span>' : '—'}</div>` +
+        (it && it.affix ? `<div class="eq-af">${affixDesc(it)}</div>` : '');
     }).join('');
   } else eq.classList.add('hide');
 
@@ -9604,10 +9682,29 @@ function skillInfo(u, id) {
   return '<h5 class="q' + s.q + '">' + s.n + '<em>' + QN[s.q] + '</em></h5><p>' + s.d + '</p>' +
     rows.map(r => '<div class="sr">' + r + '</div>').join('');
 }
+// 裝備說明：品質、部位限制、數值、詞綴（含實際數字）——已裝備在單位身上的
+// 裝備欄也用這個，跟背包清單裡的說明是同一套資料，只是這裡多了品質標題列
+function gearInfo(it) {
+  const only = useHint(it);
+  const af = it.affix ? '<div class="sr" style="color:#5fd39a">' + affixDesc(it) + '</div>' : '';
+  return '<h5 class="q' + it.r + '" style="color:' + RARITY[it.r].col + '">' + itemName(it) +
+    '<em>' + RARITY[it.r].n + '</em></h5>' +
+    '<p>' + SLOT_N[it.slot] + (only ? '　' + only : '') + '</p>' +
+    '<div class="sr">' + itemStats(it) + '</div>' + af;
+}
 let skillTipEl = null;
 function showSkillTip(u, id, el) {
   const t = $('skillTip');
   t.innerHTML = skillInfo(u, id);
+  t.classList.remove('hide');
+  const r = el.getBoundingClientRect();
+  t.style.left = Math.max(8, Math.min(uiW() - t.offsetWidth - 8, r.left / uiK() + r.width / uiK() / 2 - t.offsetWidth / 2)) + 'px';
+  t.style.top = (r.top / uiK() - t.offsetHeight - 10) + 'px';
+  skillTipEl = el;
+}
+function showGearTip(it, el) {
+  const t = $('skillTip');
+  t.innerHTML = gearInfo(it);
   t.classList.remove('hide');
   const r = el.getBoundingClientRect();
   t.style.left = Math.max(8, Math.min(uiW() - t.offsetWidth - 8, r.left / uiK() + r.width / uiK() / 2 - t.offsetWidth / 2)) + 'px';
@@ -9924,6 +10021,11 @@ function buildCard(u) {
   // 裝備欄：點＝選起來，雙擊或拖回背包＝卸下
   card.querySelectorAll('.eslot').forEach(e => {
     const sl = e.dataset.slot;
+    const it = u.equip[sl];
+    if (it) {
+      e.onpointerenter = () => showGearTip(it, e);
+      e.onpointerleave = hideSkillTip;
+    }
     e.onclick = ev => {
       ev.stopPropagation();
       bagSlot = (bagSlot && bagSlot.uid === u.id && bagSlot.slot === sl) ? null : { uid: u.id, slot: sl };
@@ -10390,8 +10492,8 @@ function pickTile(ev) {
   return best;
 }
 
-// 地塊資訊：地形種類／加成、競技場一次性增益、目前受哪個持續地塊影響——
-// 滑鼠停在同一格 2 秒後才出現，免得平常移動滑鼠時一直閃
+// 地塊資訊：地形種類／加成、競技場一次性增益（含效果說明）、目前受哪個
+// 持續地塊影響——在格子上按一下滑鼠右鍵才出現，滑鼠一移動就收掉
 function tileInfo(x, y) {
   const t = ter(x, y);
   const rows = ['<b>' + t.n + '</b>'];
@@ -10402,10 +10504,10 @@ function tileInfo(x, y) {
   else if (t.cost > 1) bonus.push('移動消耗 ' + t.cost);
   if (t.mire) bonus.push('踏進來就會停下');
   if (t.block) bonus.push('擋視線');
-  if (bonus.length) rows.push(bonus.join('　'));
+  rows.push(bonus.length ? bonus.join('　') : '沒有特殊加成');
   if (G.arena) {
     const kind = ARENA_BUFFS[x + ',' + y];
-    if (kind) rows.push('<span class="tt-buff">地塊增益：' + ARENA_BUFF_N[kind] + '</span>');
+    if (kind) rows.push('<span class="tt-buff">地塊增益：' + ARENA_BUFF_N[kind] + '——' + ARENA_BUFF_D[kind] + '</span>');
   }
   for (const f of FIELDS) {
     if (Math.max(Math.abs(x - f.x), Math.abs(y - f.y)) <= f.r)
@@ -10421,23 +10523,13 @@ function showTileTip(x, y, cx, cy) {
   el.style.top = Math.max(8, Math.min(uiH() - el.offsetHeight - 8, cy / uiK() + 14)) + 'px';
 }
 const hideTileTip = () => $('tileTip').classList.add('hide');
-let tileTipTimer = null;
 
 let hoverUnit = null, hover = null;
 function onHover(ev) {
+  hideTileTip();
   const t = pickTile(ev);
   const moved = !hover || !t || hover[0] !== t[0] || hover[1] !== t[1];
   hover = t;
-  if (moved) {
-    hideTileTip();
-    clearTimeout(tileTipTimer);
-    if (t) {
-      const [tx, ty] = t, cx = ev.clientX, cy = ev.clientY;
-      tileTipTimer = setTimeout(() => {
-        if (hover && hover[0] === tx && hover[1] === ty) showTileTip(tx, ty, cx, cy);
-      }, 2000);
-    }
-  }
   const u = t ? unitAt(t[0], t[1]) : null;
   hoverUnit = u;
   if (skillMode && sel && moved) drawRanges();
@@ -10576,7 +10668,7 @@ function bindInput() {
   el.addEventListener('pointerdown', e => {
     down = { x: e.clientX, y: e.clientY, btn: e.button, az: camAz, el: camEl };
     dragged = false;
-    hideTileTip(); clearTimeout(tileTipTimer);
+    hideTileTip();
   });
   addEventListener('pointermove', e => {
     if (!down) { if (!busy) onHover(e); return; }
@@ -10597,7 +10689,11 @@ function bindInput() {
     camDist = Math.max(10, Math.min(70, camDist + Math.sign(e.deltaY) * 2.2 * (SET.zoomSpeed / 100)));
     updCam();
   }, { passive: false });
-  el.addEventListener('contextmenu', e => e.preventDefault());
+  el.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    const t = pickTile(e);
+    if (t) showTileTip(t[0], t[1], e.clientX, e.clientY);
+  });
 
   $('mm').addEventListener('pointerdown', e => {
     const r = e.target.getBoundingClientRect();
@@ -10673,15 +10769,23 @@ function aiGoal(u) {
   }
   if (best) return best;
 
-  // 等級還低就先去打怪，練起來再上王座
+  // 等級還低就先去打怪，練起來再上王座——但不能只看「最近」，不然新版怪物等級
+  // 是連續漸層、離王座近的怪隨便都比自己高一大截，最近的那隻常常就是超等怪，
+  // 揀到就是送死。距離照樣加分，但怪物等級明顯超過自己要重罰；分數太差
+  // （附近全是啃不動的超等怪）就乾脆不衝，退回去顧王座。
   if (u.lv < 4) {
-    let m = null, md = 14;
+    let m = null, mb = -1e9;
     for (const o of alive()) {
       if (o.side !== 2) continue;
       const d = dist(u, o);
-      if (d < md) { md = d; m = o; }
+      if (d > 14) continue;
+      const lvGap = o.lv - u.lv;
+      let sc = -d * 2;
+      if (lvGap > 2) sc -= (lvGap - 2) * 15;
+      else if (lvGap < 0) sc += 3;
+      if (sc > mb) { mb = sc; m = o; }
     }
-    if (m) return m;
+    if (m && mb > -40) return m;
   }
   return thr;
 }
@@ -10782,12 +10886,18 @@ function aiPlan(u) {
     const g = aiGoal(u);
     // 治療者要跟上隊伍但別站到前線去
     const timid = base(u).healPct ? 4 : 1;
-    let mv = null, mb = -1e9;
+    let mv = null, mb = -1e9, safeMv = null, safeR = 1e9;
     for (const [sx, sy] of stops) {
+      const risk = aiRisk(u, sx, sy);
+      if (risk < safeR) { safeR = risk; safeMv = [sx, sy]; }
       const d = Math.abs(sx - g.x) + Math.abs(sy - g.y);
-      const sc = -d * 4 - aiRisk(u, sx, sy) * 0.6 * timid;
+      // 風險的權重調高（0.6→1.2），不要為了少走一步硬鑽進一群敵人的攻擊範圍
+      const sc = -d * 3 - risk * 1.2 * timid;
       if (sc > mb) { mb = sc; mv = [sx, sy]; }
     }
+    // 往目標方向走最好的那一步風險還是很高，而且待在原地或退開明顯安全很多，
+    // 就別硬衝，改站去這回合摸得到的最安全格子
+    if (mv && aiRisk(u, mv[0], mv[1]) > 35 && safeR < aiRisk(u, bx, by) - 5) mv = safeMv;
     if (mv && (mv[0] !== bx || mv[1] !== by))
       take({ score: 8, action: { kind: 'move', uid: u.id, dest: mv } });
   }
@@ -11163,6 +11273,90 @@ function openPick(side, then) {
   paint();
 }
 
+/* ── 開局節奏設定：選完角色、開局前跳出來，調商店/競技場多久出現一次、勝利門檻 ── */
+
+function openPaceConfig(then) {
+  $('menu').classList.remove('hide');
+  ['mMain', 'mNet', 'mWait', 'mPick'].forEach(i => $(i).classList.add('hide'));
+  $('mPace').classList.remove('hide');
+  $('menu').querySelector('.card').classList.add('wide');
+
+  const rangeRow = (label, key, min, max, suffix) => {
+    const d = document.createElement('div');
+    d.className = 'setr';
+    d.innerHTML = `<span class="setl">${label}</span>`;
+    const wrap = document.createElement('div');
+    wrap.className = 'setv';
+    const i = document.createElement('input');
+    i.type = 'range'; i.min = min; i.max = max; i.value = PACE[key];
+    const em = document.createElement('em');
+    em.textContent = PACE[key] + suffix;
+    i.oninput = () => {
+      PACE[key] = +i.value; em.textContent = PACE[key] + suffix;
+      savePace(); drawTimeline();
+    };
+    wrap.appendChild(i); wrap.appendChild(em);
+    d.appendChild(wrap);
+    return d;
+  };
+  const toggleRow = (label, onKey, numKey, min, max, suffix) => {
+    const d = document.createElement('div');
+    d.className = 'setr';
+    d.innerHTML = `<span class="setl">${label}</span>`;
+    const wrap = document.createElement('div');
+    wrap.className = 'setv';
+    const b = document.createElement('button');
+    b.className = 'stg';
+    const i = document.createElement('input');
+    i.type = 'range'; i.min = min; i.max = max; i.value = PACE[numKey];
+    const em = document.createElement('em');
+    const paint = () => { b.textContent = PACE[onKey] ? '開' : '關'; b.classList.toggle('on', !!PACE[onKey]); };
+    paint();
+    em.textContent = PACE[numKey] + suffix;
+    b.onclick = () => { PACE[onKey] = !PACE[onKey]; paint(); savePace(); };
+    i.oninput = () => { PACE[numKey] = +i.value; em.textContent = PACE[numKey] + suffix; savePace(); };
+    wrap.appendChild(b); wrap.appendChild(i); wrap.appendChild(em);
+    d.appendChild(wrap);
+    return d;
+  };
+
+  const rows = $('paceRows');
+  rows.innerHTML = '';
+  rows.appendChild(rangeRow('第一次商店回合', 'shopFirst', 1, 15, ' 回合'));
+  rows.appendChild(rangeRow('商店之後幾回合出現競技場', 'arenaAfterShop', 1, 10, ' 回合'));
+  rows.appendChild(rangeRow('競技場之後幾回合出現商店', 'shopAfterArena', 1, 10, ' 回合'));
+
+  const winRows = $('paceWinRows');
+  winRows.innerHTML = '';
+  winRows.appendChild(toggleRow('佔領王座連續', 'throneOn', 'throneWin', 1, 20, ' 回合獲勝'));
+  winRows.appendChild(toggleRow('累積競技場勝利', 'arenaWinOn', 'arenaWinNeed', 1, 15, ' 場獲勝'));
+
+  function drawTimeline() {
+    const tl = $('paceTimeline');
+    tl.innerHTML = '';
+    const cycle = PACE.arenaAfterShop + PACE.shopAfterArena;
+    const N = Math.min(40, PACE.shopFirst + cycle * 3);
+    for (let t = 1; t <= N; t++) {
+      const a = isArenaTurn(t), s = isShopTurn(t);
+      const chip = document.createElement('span');
+      chip.className = 'paceChip' + (a ? ' pc-a' : s ? ' pc-s' : '');
+      chip.textContent = a ? '⚔' : s ? '🛒' : t;
+      chip.title = '第 ' + t + ' 回合' + (a ? '：競技場回合' : s ? '：商店回合' : '');
+      tl.appendChild(chip);
+    }
+  }
+  drawTimeline();
+
+  $('paceGo').onclick = () => {
+    $('menu').querySelector('.card').classList.remove('wide');
+    then();
+  };
+  $('paceBack').onclick = () => {
+    $('menu').querySelector('.card').classList.remove('wide');
+    $('mPace').classList.add('hide'); $('mMain').classList.remove('hide');
+  };
+}
+
 function startPlay(picks) {
   setSize(mapSize);
   $('menu').classList.add('hide');
@@ -11251,6 +11445,7 @@ async function boot() {
 
   txt.textContent = '建構世界…';
   loadSettings();
+  loadPace();
   initThree();
   makePortraits();
   initFXTex();
@@ -11266,7 +11461,7 @@ async function boot() {
   // 本機對戰：藍軍先選，再換紅軍
   $('mLocal').onclick = () => {
     mode = 'local'; myTeam = 0;
-    openPick(0, blue => openPick(1, red => startPlay([blue, red])));
+    openPick(0, blue => openPick(1, red => openPaceConfig(() => startPlay([blue, red]))));
   };
   $('pickGo').onclick = () => { const p = pickSel.slice(); pickThen(p); };
   $('pickBack').onclick = () => {

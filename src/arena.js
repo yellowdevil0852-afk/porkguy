@@ -1,19 +1,25 @@
 /* ══════════════ 競技場 ══════════════
-   每 ARENA_INTERVAL 回合結束時，雙方所有還站著的英雄被強制傳送到一個
-   16×16 的小競技場，打**一場**——先把對方全部打倒的一方獲勝就結束
+   什麼時候開競技場現在由 PACE（data.js，開局節奏設定畫面可以調）決定，
+   見 isArenaTurn()。觸發時雙方所有還站著的英雄被強制傳送到一個 16×16
+   的小競技場，打**一場**——先把對方全部打倒的一方獲勝就結束
    （不是同一輪三戰兩勝；那個規則以後可能會再改，現在先簡單一輪定勝負）。
    結束後所有人回到原本在主戰場的位置，血量統一恢復到上限的一半——
    這樣進競技場才有風險，不是純粹白拿獎勵的小遊戲。
    場上有一次性的增益地塊，走過去就撿到、用掉就消失。地形跟增益地塊
    的位置每次都重新隨機，但兩邊用同一個種子算，畫面會完全一致。 */
 
-const ARENA_INTERVAL = 5;    // 每幾回合結束強制開一次
 const ARENA_SIZE = 16;
 const ARENA_GOLD_WIN = 40, ARENA_GOLD_LOSE = 10;
 
 // 四種一次性增益，撿到立刻生效、從地上消失
 const ARENA_BUFF_KINDS = ['power', 'charge', 'guard', 'haste'];
 const ARENA_BUFF_N = { power: '力量增幅', charge: '蓄力', guard: '守護', haste: '迅捷' };
+const ARENA_BUFF_D = {
+  power: '攻擊 +20%，持續 3 回合',
+  charge: '下一次普通攻擊 +50% 傷害，打出去就消耗掉',
+  guard: '獲得一層護盾，持續 3 回合',
+  haste: '移動 +2，持續 2 回合'
+};
 let ARENA_BUFFS = {};   // key 'x,y' -> 種類
 
 function arenaSpawns() {
@@ -175,7 +181,13 @@ async function exitArena(winnerSide) {
   log(`<b class="s${winnerSide}">${SIDE_N[winnerSide]}</b> 贏得競技場！`);
   giveGold(0, winnerSide === 0 ? ARENA_GOLD_WIN : ARENA_GOLD_LOSE);
   giveGold(1, winnerSide === 1 ? ARENA_GOLD_WIN : ARENA_GOLD_LOSE);
+  G.arenaWins[winnerSide]++;
   toast(`競技場結束，<b class="s${winnerSide}">${SIDE_N[winnerSide]}</b>獲勝！雙方都拿到了金幣`);
+  if (PACE.arenaWinOn && G.arenaWins[winnerSide] >= PACE.arenaWinNeed) {
+    await wait(700);
+    endGame(winnerSide, '競技場累積勝利 ' + PACE.arenaWinNeed + ' 場');
+    return;
+  }
   await wait(700);
 
   const { saved, participants } = G.arena;

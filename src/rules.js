@@ -1347,7 +1347,7 @@ async function startTurn(side) {
   // 王座計數
   const holder = alive().find(u => u.x === THRONE[0] && u.y === THRONE[1] && u.side === side);
   G.hold[side] = holder ? G.hold[side] + 1 : 0;
-  if (G.hold[side] >= THRONE_WIN) { endGame(side, '佔領王座滿 ' + THRONE_WIN + ' 回合'); return; }
+  if (PACE.throneOn && G.hold[side] >= THRONE_WIN) { endGame(side, '佔領王座滿 ' + THRONE_WIN + ' 回合'); return; }
 
   // 倒下的英雄倒數，時間到就在營地重新站起來
   let anyRevived = false;
@@ -1422,8 +1422,8 @@ async function doEndTurn(broadcast) {
   // 走到這裡代表雙方這一輪都結束了——背包回合夾在「所有玩家回合」跟「魔物／
   // 競技場／商店」之間，只在這裡插一次，不是每個人結束回合都插
   const proceed = async () => {
-    if (G.turn % ARENA_INTERVAL === 0) { await enterArena(); return; }
-    if (G.turn % SHOP_INTERVAL === 0) { await enterShop(); return; }
+    if (isArenaTurn(G.turn)) { await enterArena(); return; }
+    if (isShopTurn(G.turn)) { await enterShop(); return; }
     await monsterPhase();
     if (G.over) return;
     G.turn++;
@@ -1544,7 +1544,8 @@ function endGame(side, why) {
 function newGame(seed, picks) {
   G.units.forEach(removeView);
   G.units = []; G.cur = 0; G.turn = 1; G.over = null;
-  G.hold = [0, 0]; G.bag = [[], []]; G.books = [[], []];
+  G.hold = [0, 0]; G.arenaWins = [0, 0]; G.bag = [[], []]; G.books = [[], []];
+  THRONE_WIN = PACE.throneWin;                        // 開局節奏設定畫面調過的話，這裡套用
   G.orbs = [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0]];        // 技能精球
   G.gorbs = [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0]];       // 裝備精球
   G.gold = [0, 0];                                    // 金幣

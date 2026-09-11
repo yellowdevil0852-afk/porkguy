@@ -46,15 +46,23 @@ function aiGoal(u) {
   }
   if (best) return best;
 
-  // 等級還低就先去打怪，練起來再上王座
+  // 等級還低就先去打怪，練起來再上王座——但不能只看「最近」，不然新版怪物等級
+  // 是連續漸層、離王座近的怪隨便都比自己高一大截，最近的那隻常常就是超等怪，
+  // 揀到就是送死。距離照樣加分，但怪物等級明顯超過自己要重罰；分數太差
+  // （附近全是啃不動的超等怪）就乾脆不衝，退回去顧王座。
   if (u.lv < 4) {
-    let m = null, md = 14;
+    let m = null, mb = -1e9;
     for (const o of alive()) {
       if (o.side !== 2) continue;
       const d = dist(u, o);
-      if (d < md) { md = d; m = o; }
+      if (d > 14) continue;
+      const lvGap = o.lv - u.lv;
+      let sc = -d * 2;
+      if (lvGap > 2) sc -= (lvGap - 2) * 15;
+      else if (lvGap < 0) sc += 3;
+      if (sc > mb) { mb = sc; m = o; }
     }
-    if (m) return m;
+    if (m && mb > -40) return m;
   }
   return thr;
 }
@@ -155,12 +163,18 @@ function aiPlan(u) {
     const g = aiGoal(u);
     // 治療者要跟上隊伍但別站到前線去
     const timid = base(u).healPct ? 4 : 1;
-    let mv = null, mb = -1e9;
+    let mv = null, mb = -1e9, safeMv = null, safeR = 1e9;
     for (const [sx, sy] of stops) {
+      const risk = aiRisk(u, sx, sy);
+      if (risk < safeR) { safeR = risk; safeMv = [sx, sy]; }
       const d = Math.abs(sx - g.x) + Math.abs(sy - g.y);
-      const sc = -d * 4 - aiRisk(u, sx, sy) * 0.6 * timid;
+      // 風險的權重調高（0.6→1.2），不要為了少走一步硬鑽進一群敵人的攻擊範圍
+      const sc = -d * 3 - risk * 1.2 * timid;
       if (sc > mb) { mb = sc; mv = [sx, sy]; }
     }
+    // 往目標方向走最好的那一步風險還是很高，而且待在原地或退開明顯安全很多，
+    // 就別硬衝，改站去這回合摸得到的最安全格子
+    if (mv && aiRisk(u, mv[0], mv[1]) > 35 && safeR < aiRisk(u, bx, by) - 5) mv = safeMv;
     if (mv && (mv[0] !== bx || mv[1] !== by))
       take({ score: 8, action: { kind: 'move', uid: u.id, dest: mv } });
   }

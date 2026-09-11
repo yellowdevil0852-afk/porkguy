@@ -37,6 +37,18 @@ function loadSettings() {
 function saveSettings() {
   try { localStorage.setItem(SET_KEY, JSON.stringify(SET)); } catch (e) { /* 存不了就算了 */ }
 }
+
+// 開局節奏（商店/競技場多久出現一次、勝利門檻）也存起來，不然每局都要重調
+const PACE_KEY = 'porkguy.pace.v1';
+function loadPace() {
+  try {
+    const raw = localStorage.getItem(PACE_KEY);
+    if (raw) Object.assign(PACE, JSON.parse(raw));
+  } catch (e) { /* 讀不到就用預設 */ }
+}
+function savePace() {
+  try { localStorage.setItem(PACE_KEY, JSON.stringify(PACE)); } catch (e) { /* 存不了就算了 */ }
+}
 function setOpt(k, v) {
   SET[k] = v;
   saveSettings();

@@ -5,8 +5,32 @@ let W = 27, H = 27;                      // 地圖邊長，開局時由選單決
 const TILE = 2;
 const SIZES = [16, 32, 64, 96, 128];     // 可選的地圖大小
 let THRONE = [13, 13];                   // 正中央，setSize() 會重算
-const THRONE_WIN = 5;                    // 連續佔領幾回合獲勝
+let THRONE_WIN = 5;                      // 連續佔領幾回合獲勝——開局節奏設定畫面可以調，newGame() 會套用
 const AGGRO = 3;                         // 怪物驚醒距離
+
+// 開局節奏：商店/競技場多久出現一次、勝利條件門檻——開局節奏設定畫面調的
+// 就是這包，本機對戰選完角色之後跳出來讓玩家自己排。
+let PACE = {
+  shopFirst: 3,        // 第一次商店回合
+  arenaAfterShop: 2,   // 商店之後幾回合出現競技場
+  shopAfterArena: 3,   // 競技場之後幾回合出現下一次商店
+  throneOn: true, throneWin: 5,        // 佔領王座連續 N 回合獲勝
+  arenaWinOn: false, arenaWinNeed: 3   // 累積競技場勝利場次獲勝（預設關閉）
+};
+// 這回合是不是該進商店／競技場：從第一次商店回合開始，兩種回合交替出現，
+// 週期＝商店後幾回合到競技場＋競技場後幾回合到商店；不用求最大公因數，
+// 單純各自往後推算即可，兩邊算出來的回合數保證一致（PACE 是雙方同一份設定）。
+function isShopTurn(t) {
+  if (t < PACE.shopFirst) return false;
+  const cycle = PACE.arenaAfterShop + PACE.shopAfterArena;
+  return (t - PACE.shopFirst) % cycle === 0;
+}
+function isArenaTurn(t) {
+  const first = PACE.shopFirst + PACE.arenaAfterShop;
+  if (t < first) return false;
+  const cycle = PACE.arenaAfterShop + PACE.shopAfterArena;
+  return (t - first) % cycle === 0;
+}
 const LEASH = 8;                         // 怪物離營地最遠追多少格
 const REVIVE_TURNS = 3;                  // 英雄倒下後幾回合在營地復活
 const REVIVE_DASH = 2;                   // 復活後兩回合的額外移動力
@@ -61,7 +85,7 @@ const ARM_N = { heavy: '重甲', light: '輕甲', cloth: '布甲' };
 const CLS = {
   KN: {
     n: '騎士', pro: '聖殿騎士', model: 'Knight', dmg: 'melee', arm: 'heavy',
-    hp: 34, atk: 11, def: 7, mov: 4, rng: 1,
+    hp: 34, atk: 8, def: 7, mov: 4, rng: 1,
     show: { 1: ['1H_Sword', 'Round_Shield'], 2: ['2H_Sword'] },
     pass: '守護：周圍一格的友軍受到的傷害 −2'
   },
@@ -130,7 +154,7 @@ const XP_SHARE = 0.4, XP_SHARE_R = 3;             // 幾格內的隊友分多少
 const LV_GAIN = { hp: 5, atk: 2, def: 1 };
 const FREE_PTS = 2;                               // 每升一級可自由分配的點數
 // 一點自由屬性點換到的東西
-const PT_GAIN = { atk: 1, def: 1, hp: 4 };
+const PT_GAIN = { atk: 1, def: 1, hp: 8 };
 const PT_N = { atk: '攻擊', def: '防禦', hp: '生命' };
 const MON_GAIN = { hp: 4, atk: 1, def: 1 };      // 怪物的等級成長，刻意比英雄慢
 const PROMO_LV = 5, PROMO = { hp: 12, atk: 4, def: 3, mov: 1 };
