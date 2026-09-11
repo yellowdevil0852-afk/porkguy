@@ -324,6 +324,14 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
 #skillTip .sr{display:flex;gap:6px;font-size:11.5px;padding:1px 0}
 #skillTip .sr b{color:var(--txt);font-weight:700}
 
+/* ── 地塊資訊浮窗（滑鼠停在格子上 2 秒後出現）── */
+#tileTip{position:fixed;z-index:59;zoom:var(--uiscale);max-width:220px;padding:8px 11px;pointer-events:none;
+  background:rgba(14,19,28,.97);border:1px solid #3a4560;border-radius:9px;
+  box-shadow:0 10px 30px #000c;font-size:11.5px;line-height:1.6;color:#c8d2e2}
+#tileTip b{color:var(--gold)}
+#tileTip .tt-buff{color:#5fd39a;display:block;margin-top:3px}
+#tileTip .tt-field{color:#ff9a5a;display:block;margin-top:3px}
+
 /* ── 等著重生的怪 ── */
 .resp{position:absolute;transform:translate(-50%,-50%);color:#ff8f7d;font-size:13px;
   font-weight:800;text-shadow:0 1px 4px #000,0 0 8px #000;pointer-events:none}
@@ -602,6 +610,7 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
 <div id="turnBanner" class="hide"><span id="turnBigTxt"></span></div>
 <div id="arenaFx" class="hide"><span id="arenaFxTxt">競技場回合</span></div>
 <div id="skillTip" class="hide"></div>
+<div id="tileTip" class="hide"></div>
 
 <div id="menu" class="overlay">
   <div class="card panel">
@@ -5449,7 +5458,8 @@ const ST = {
   guarded:{ n: '護衛', good: 1, d: '受到的部分傷害改由守護者承擔' },
   mitig:  { n: '絕對防禦', good: 1, d: '受到的傷害直接減少一個百分比' },
   immune: { n: '無敵', good: 1, d: '免疫所有傷害' },
-  rip:    { n: '反擊架式', good: 1, d: '反擊傷害提升' }
+  rip:    { n: '反擊架式', good: 1, d: '反擊傷害提升' },
+  resist: { n: '硬控抗性', good: 1, d: '中硬控（暈眩/定身/冰凍/沉默/恐懼）的時間減半' }
 };
 
 const s = (id, pct, turns, val) => ({ id, pct, turns, val });
@@ -6342,12 +6352,18 @@ function buildUnitView(u) {
       c.geometry.boundingSphere.radius *= 2.2;
       c.geometry.userData.inflated = true;
     }
+    // 一律先各自複製一份材質，藏不藏都要複製——很多部件（含武器/帽子）共用同一份
+    // 材質物件，如果只有「會顯示的」才複製，被藏起來的那份還是指到共用的原始材質，
+    // 死亡淡出動畫（下面 die() 那段）會直接改 c.material.opacity，改到的其實是
+    // GLTF 範本共用的那份，之後所有職業重新復活/重建模型都會複製到一份透明度已經
+    // 被改成 0 的材質，武器/帽子就「復活後消失」了（其實是永遠 opacity:0，不是
+    // visible:false）。先複製一份material再判斷要不要藏起來，就不會共用到範本。
+    c.material = c.material.clone();
+    c.material.metalness = 0; c.material.roughness = 0.92;
     if (show && /^(1H_|2H_|Knife|Round_Shield|Spellbook|Throwable|Mug|Badge_|Rectangle_|Spike_)/.test(c.name)
         && !show.includes(c.name)) { c.visible = false; return; }
     if (def.show && /_Hat$|_Helmet$/.test(c.name) && show && !show.includes(c.name)) { c.visible = false; return; }
-    c.material = c.material.clone();
     c.material.color.multiply(tint);
-    c.material.metalness = 0; c.material.roughness = 0.92;
     c.userData.base = c.material.color.clone();
   });
 
@@ -6681,9 +6697,17 @@ function addSt(u, src, e) {
     v = -Math.round(Math.max(1, e.id === 'weaken' ? atkOf(u) : defOf(u)) * e.pct);
   if (e.id === 'slow') v = -(e.val || 1);                     // 減速：直接扣移動格數
   if (e.id === 'curse') v = e.pct;
+  let turns = (e.turns || 1) + 1;
+  // 硬控遞減：短時間內連續中「完全不能行動/移動」的硬控（暈眩/定身/冰凍/
+  // 沉默/恐懼——嘲諷、繳械不算，那兩個只是限制打誰/擋普攻），時間減半，
+  // 避免好幾個技能接力把同一個角色永遠鎖死動不了。
+  if (CTRL.includes(e.id)) {
+    if (hasSt(u, 'resist')) { turns = Math.max(2, Math.ceil((turns - 1) / 2) + 1); floatText(u.x, u.y, '硬控抗性', 'up'); }
+    addSt(u, u, { id: 'resist', turns: 2 });
+  }
   const old = u.st.find(x => x.id === e.id);
-  if (old && !ST[e.id].dot) { old.v = e.id === 'shield' ? old.v + v : v; old.turns = Math.max(old.turns, e.turns + 1); }
-  else u.st.push({ id: e.id, v, turns: (e.turns || 1) + 1, from: src.id });
+  if (old && !ST[e.id].dot) { old.v = e.id === 'shield' ? old.v + v : v; old.turns = Math.max(old.turns, turns); }
+  else u.st.push({ id: e.id, v, turns, from: src.id });
   updTag(u);
 }
 const hasSt = (u, id) => u.st.some(x => x.id === id);
@@ -7900,7 +7924,7 @@ async function useSkill(u, id, a) {
       playFX(s.fx, u, { x: tx, y: ty });
       ringFX(tx, ty, s.fx === 'ice' ? 0x8fe6ff : 0xff7a20, TILE * (s.r * 2 + 1), 0.7);
       FIELDS.push({ x: tx, y: ty, r: s.r, pct: s.pct || 0, st: s.st || null, give: s.give || null,
-        heal: s.heal || 0, fx: s.fx, side: u.side, uid: u.id, turns: (s.turns || 2) + 1 });
+        heal: s.heal || 0, fx: s.fx, n: s.n, side: u.side, uid: u.id, turns: (s.turns || 2) + 1 });
       refreshFields();
       // 施放當下先結算一次，不然要等對方回合才有效果
       await fieldHit(FIELDS[FIELDS.length - 1]);
@@ -8268,12 +8292,18 @@ async function monsterPhase() {
     if (m.camp !== lastCam) { lastCam = m.camp; await moveCam(m.x, m.y); }
     m.turned = false;
     for (const k in m.cds) if (m.cds[k] > 0) m.cds[k]--;
+    // 怪物沒有「自己的回合」可以掛勾，狀態的持續時間跟解除就放在這裡結算——
+    // 之前完全沒呼叫過，玩家對怪物上的暈眩/定身/冰凍/中毒/減速全部永遠不會消失
+    await tickStatus(m);
+    if (!m.alive || G.over) continue;               // tickStatus 的持續傷害有可能打死牠
+    if (!canActU(m)) continue;                       // 暈眩/冰凍/恐懼：這回合什麼都不能做
 
-
-    // 找最近的英雄（同距離取 id 小的，兩邊才會算出一樣的結果）
+    // 找最近的英雄（同距離取 id 小的，兩邊才會算出一樣的結果）——被嘲諷的話只能鎖嘲諷來源
+    const lock = tauntTid(m);
     let tgt = null, bd = 1e9;
     for (const u of alive()) {
       if (u.side === 2) continue;
+      if (lock && u.id !== lock) continue;
       const d = dist(u, m);
       if (d < bd || (d === bd && tgt && u.id < tgt.id)) { bd = d; tgt = u; }
     }
@@ -8298,6 +8328,7 @@ async function monsterPhase() {
       await mAttack(m, tgt);
       continue;
     }
+    if (!canMoveU(m)) continue;   // 定身：打不到就乾脆站著，不能硬走過去
     // 走過去
     const r = reachOf(m);
     const hit = stopToHit(r, m, tgt.x, tgt.y);
@@ -8318,6 +8349,7 @@ async function monsterPhase() {
 }
 
 async function mAttack(m, tgt) {
+  if (!canAtkU(m)) { floatText(m.x, m.y, '繳械', 'up'); return; }   // 少見，但玩家的繳械技能也能打怪
   await strike(m, tgt);
   if (tgt.hp <= 0) { await die(tgt, m); return; }
   if (canCounter(m, tgt)) {
@@ -8417,6 +8449,7 @@ const ARENA_GOLD_WIN = 40, ARENA_GOLD_LOSE = 10;
 
 // 四種一次性增益，撿到立刻生效、從地上消失
 const ARENA_BUFF_KINDS = ['power', 'charge', 'guard', 'haste'];
+const ARENA_BUFF_N = { power: '力量增幅', charge: '蓄力', guard: '守護', haste: '迅捷' };
 let ARENA_BUFFS = {};   // key 'x,y' -> 種類
 
 function arenaSpawns() {
@@ -8624,8 +8657,9 @@ async function pickupArenaBuff(u) {
   if (!kind) return;
   delete ARENA_BUFFS[key];
   refreshArenaBuffTiles();
-  const names = { power: '力量增幅', charge: '蓄力', guard: '守護', haste: '迅捷' };
-  floatText(u.x, u.y, names[kind] + '！', 'up');
+  // 撿到就地生根：不能再按「復原移動」退回去，不然等於免費撿增益又不用付出站位代價
+  if (preMove && preMove.uid === u.id) preMove = null;
+  floatText(u.x, u.y, ARENA_BUFF_N[kind] + '！', 'up');
   if (kind === 'power') {
     addSt(u, u, { id: 'atk', pct: 0.2, turns: 3 });
     log(`<span class="s${u.side}">${nameOf(u)}</span> 撿到「力量增幅」，攻擊 +20%（3 回合）`);
@@ -10356,11 +10390,54 @@ function pickTile(ev) {
   return best;
 }
 
+// 地塊資訊：地形種類／加成、競技場一次性增益、目前受哪個持續地塊影響——
+// 滑鼠停在同一格 2 秒後才出現，免得平常移動滑鼠時一直閃
+function tileInfo(x, y) {
+  const t = ter(x, y);
+  const rows = ['<b>' + t.n + '</b>'];
+  const bonus = [];
+  if (t.def) bonus.push('防禦' + (t.def > 0 ? '+' : '') + t.def);
+  if (t.atk) bonus.push('攻擊' + (t.atk > 0 ? '+' : '') + t.atk);
+  if (t.cost >= 90) bonus.push('不可通行');
+  else if (t.cost > 1) bonus.push('移動消耗 ' + t.cost);
+  if (t.mire) bonus.push('踏進來就會停下');
+  if (t.block) bonus.push('擋視線');
+  if (bonus.length) rows.push(bonus.join('　'));
+  if (G.arena) {
+    const kind = ARENA_BUFFS[x + ',' + y];
+    if (kind) rows.push('<span class="tt-buff">地塊增益：' + ARENA_BUFF_N[kind] + '</span>');
+  }
+  for (const f of FIELDS) {
+    if (Math.max(Math.abs(x - f.x), Math.abs(y - f.y)) <= f.r)
+      rows.push('<span class="tt-field">' + SIDE_N[f.side] + '的「' + (f.n || '持續地塊') + '」影響中</span>');
+  }
+  return rows.join('<br>');
+}
+function showTileTip(x, y, cx, cy) {
+  const el = $('tileTip');
+  el.innerHTML = tileInfo(x, y);
+  el.classList.remove('hide');
+  el.style.left = Math.max(8, Math.min(uiW() - el.offsetWidth - 8, cx / uiK() + 14)) + 'px';
+  el.style.top = Math.max(8, Math.min(uiH() - el.offsetHeight - 8, cy / uiK() + 14)) + 'px';
+}
+const hideTileTip = () => $('tileTip').classList.add('hide');
+let tileTipTimer = null;
+
 let hoverUnit = null, hover = null;
 function onHover(ev) {
   const t = pickTile(ev);
   const moved = !hover || !t || hover[0] !== t[0] || hover[1] !== t[1];
   hover = t;
+  if (moved) {
+    hideTileTip();
+    clearTimeout(tileTipTimer);
+    if (t) {
+      const [tx, ty] = t, cx = ev.clientX, cy = ev.clientY;
+      tileTipTimer = setTimeout(() => {
+        if (hover && hover[0] === tx && hover[1] === ty) showTileTip(tx, ty, cx, cy);
+      }, 2000);
+    }
+  }
   const u = t ? unitAt(t[0], t[1]) : null;
   hoverUnit = u;
   if (skillMode && sel && moved) drawRanges();
@@ -10499,6 +10576,7 @@ function bindInput() {
   el.addEventListener('pointerdown', e => {
     down = { x: e.clientX, y: e.clientY, btn: e.button, az: camAz, el: camEl };
     dragged = false;
+    hideTileTip(); clearTimeout(tileTipTimer);
   });
   addEventListener('pointermove', e => {
     if (!down) { if (!busy) onHover(e); return; }

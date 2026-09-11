@@ -318,6 +318,14 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
 #skillTip .sr{display:flex;gap:6px;font-size:11.5px;padding:1px 0}
 #skillTip .sr b{color:var(--txt);font-weight:700}
 
+/* ── 地塊資訊浮窗（滑鼠停在格子上 2 秒後出現）── */
+#tileTip{position:fixed;z-index:59;zoom:var(--uiscale);max-width:220px;padding:8px 11px;pointer-events:none;
+  background:rgba(14,19,28,.97);border:1px solid #3a4560;border-radius:9px;
+  box-shadow:0 10px 30px #000c;font-size:11.5px;line-height:1.6;color:#c8d2e2}
+#tileTip b{color:var(--gold)}
+#tileTip .tt-buff{color:#5fd39a;display:block;margin-top:3px}
+#tileTip .tt-field{color:#ff9a5a;display:block;margin-top:3px}
+
 /* ── 等著重生的怪 ── */
 .resp{position:absolute;transform:translate(-50%,-50%);color:#ff8f7d;font-size:13px;
   font-weight:800;text-shadow:0 1px 4px #000,0 0 8px #000;pointer-events:none}

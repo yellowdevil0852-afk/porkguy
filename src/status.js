@@ -22,9 +22,17 @@ function addSt(u, src, e) {
     v = -Math.round(Math.max(1, e.id === 'weaken' ? atkOf(u) : defOf(u)) * e.pct);
   if (e.id === 'slow') v = -(e.val || 1);                     // 減速：直接扣移動格數
   if (e.id === 'curse') v = e.pct;
+  let turns = (e.turns || 1) + 1;
+  // 硬控遞減：短時間內連續中「完全不能行動/移動」的硬控（暈眩/定身/冰凍/
+  // 沉默/恐懼——嘲諷、繳械不算，那兩個只是限制打誰/擋普攻），時間減半，
+  // 避免好幾個技能接力把同一個角色永遠鎖死動不了。
+  if (CTRL.includes(e.id)) {
+    if (hasSt(u, 'resist')) { turns = Math.max(2, Math.ceil((turns - 1) / 2) + 1); floatText(u.x, u.y, '硬控抗性', 'up'); }
+    addSt(u, u, { id: 'resist', turns: 2 });
+  }
   const old = u.st.find(x => x.id === e.id);
-  if (old && !ST[e.id].dot) { old.v = e.id === 'shield' ? old.v + v : v; old.turns = Math.max(old.turns, e.turns + 1); }
-  else u.st.push({ id: e.id, v, turns: (e.turns || 1) + 1, from: src.id });
+  if (old && !ST[e.id].dot) { old.v = e.id === 'shield' ? old.v + v : v; old.turns = Math.max(old.turns, turns); }
+  else u.st.push({ id: e.id, v, turns, from: src.id });
   updTag(u);
 }
 const hasSt = (u, id) => u.st.some(x => x.id === id);

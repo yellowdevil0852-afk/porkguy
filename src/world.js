@@ -661,12 +661,18 @@ function buildUnitView(u) {
       c.geometry.boundingSphere.radius *= 2.2;
       c.geometry.userData.inflated = true;
     }
+    // 一律先各自複製一份材質，藏不藏都要複製——很多部件（含武器/帽子）共用同一份
+    // 材質物件，如果只有「會顯示的」才複製，被藏起來的那份還是指到共用的原始材質，
+    // 死亡淡出動畫（下面 die() 那段）會直接改 c.material.opacity，改到的其實是
+    // GLTF 範本共用的那份，之後所有職業重新復活/重建模型都會複製到一份透明度已經
+    // 被改成 0 的材質，武器/帽子就「復活後消失」了（其實是永遠 opacity:0，不是
+    // visible:false）。先複製一份material再判斷要不要藏起來，就不會共用到範本。
+    c.material = c.material.clone();
+    c.material.metalness = 0; c.material.roughness = 0.92;
     if (show && /^(1H_|2H_|Knife|Round_Shield|Spellbook|Throwable|Mug|Badge_|Rectangle_|Spike_)/.test(c.name)
         && !show.includes(c.name)) { c.visible = false; return; }
     if (def.show && /_Hat$|_Helmet$/.test(c.name) && show && !show.includes(c.name)) { c.visible = false; return; }
-    c.material = c.material.clone();
     c.material.color.multiply(tint);
-    c.material.metalness = 0; c.material.roughness = 0.92;
     c.userData.base = c.material.color.clone();
   });
 

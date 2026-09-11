@@ -1239,11 +1239,54 @@ function pickTile(ev) {
   return best;
 }
 
+// 地塊資訊：地形種類／加成、競技場一次性增益、目前受哪個持續地塊影響——
+// 滑鼠停在同一格 2 秒後才出現，免得平常移動滑鼠時一直閃
+function tileInfo(x, y) {
+  const t = ter(x, y);
+  const rows = ['<b>' + t.n + '</b>'];
+  const bonus = [];
+  if (t.def) bonus.push('防禦' + (t.def > 0 ? '+' : '') + t.def);
+  if (t.atk) bonus.push('攻擊' + (t.atk > 0 ? '+' : '') + t.atk);
+  if (t.cost >= 90) bonus.push('不可通行');
+  else if (t.cost > 1) bonus.push('移動消耗 ' + t.cost);
+  if (t.mire) bonus.push('踏進來就會停下');
+  if (t.block) bonus.push('擋視線');
+  if (bonus.length) rows.push(bonus.join('　'));
+  if (G.arena) {
+    const kind = ARENA_BUFFS[x + ',' + y];
+    if (kind) rows.push('<span class="tt-buff">地塊增益：' + ARENA_BUFF_N[kind] + '</span>');
+  }
+  for (const f of FIELDS) {
+    if (Math.max(Math.abs(x - f.x), Math.abs(y - f.y)) <= f.r)
+      rows.push('<span class="tt-field">' + SIDE_N[f.side] + '的「' + (f.n || '持續地塊') + '」影響中</span>');
+  }
+  return rows.join('<br>');
+}
+function showTileTip(x, y, cx, cy) {
+  const el = $('tileTip');
+  el.innerHTML = tileInfo(x, y);
+  el.classList.remove('hide');
+  el.style.left = Math.max(8, Math.min(uiW() - el.offsetWidth - 8, cx / uiK() + 14)) + 'px';
+  el.style.top = Math.max(8, Math.min(uiH() - el.offsetHeight - 8, cy / uiK() + 14)) + 'px';
+}
+const hideTileTip = () => $('tileTip').classList.add('hide');
+let tileTipTimer = null;
+
 let hoverUnit = null, hover = null;
 function onHover(ev) {
   const t = pickTile(ev);
   const moved = !hover || !t || hover[0] !== t[0] || hover[1] !== t[1];
   hover = t;
+  if (moved) {
+    hideTileTip();
+    clearTimeout(tileTipTimer);
+    if (t) {
+      const [tx, ty] = t, cx = ev.clientX, cy = ev.clientY;
+      tileTipTimer = setTimeout(() => {
+        if (hover && hover[0] === tx && hover[1] === ty) showTileTip(tx, ty, cx, cy);
+      }, 2000);
+    }
+  }
   const u = t ? unitAt(t[0], t[1]) : null;
   hoverUnit = u;
   if (skillMode && sel && moved) drawRanges();
@@ -1382,6 +1425,7 @@ function bindInput() {
   el.addEventListener('pointerdown', e => {
     down = { x: e.clientX, y: e.clientY, btn: e.button, az: camAz, el: camEl };
     dragged = false;
+    hideTileTip(); clearTimeout(tileTipTimer);
   });
   addEventListener('pointermove', e => {
     if (!down) { if (!busy) onHover(e); return; }

@@ -13,6 +13,7 @@ const ARENA_GOLD_WIN = 40, ARENA_GOLD_LOSE = 10;
 
 // 四種一次性增益，撿到立刻生效、從地上消失
 const ARENA_BUFF_KINDS = ['power', 'charge', 'guard', 'haste'];
+const ARENA_BUFF_N = { power: '力量增幅', charge: '蓄力', guard: '守護', haste: '迅捷' };
 let ARENA_BUFFS = {};   // key 'x,y' -> 種類
 
 function arenaSpawns() {
@@ -220,8 +221,9 @@ async function pickupArenaBuff(u) {
   if (!kind) return;
   delete ARENA_BUFFS[key];
   refreshArenaBuffTiles();
-  const names = { power: '力量增幅', charge: '蓄力', guard: '守護', haste: '迅捷' };
-  floatText(u.x, u.y, names[kind] + '！', 'up');
+  // 撿到就地生根：不能再按「復原移動」退回去，不然等於免費撿增益又不用付出站位代價
+  if (preMove && preMove.uid === u.id) preMove = null;
+  floatText(u.x, u.y, ARENA_BUFF_N[kind] + '！', 'up');
   if (kind === 'power') {
     addSt(u, u, { id: 'atk', pct: 0.2, turns: 3 });
     log(`<span class="s${u.side}">${nameOf(u)}</span> 撿到「力量增幅」，攻擊 +20%（3 回合）`);

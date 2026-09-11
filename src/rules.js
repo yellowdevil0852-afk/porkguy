@@ -1088,7 +1088,7 @@ async function useSkill(u, id, a) {
       playFX(s.fx, u, { x: tx, y: ty });
       ringFX(tx, ty, s.fx === 'ice' ? 0x8fe6ff : 0xff7a20, TILE * (s.r * 2 + 1), 0.7);
       FIELDS.push({ x: tx, y: ty, r: s.r, pct: s.pct || 0, st: s.st || null, give: s.give || null,
-        heal: s.heal || 0, fx: s.fx, side: u.side, uid: u.id, turns: (s.turns || 2) + 1 });
+        heal: s.heal || 0, fx: s.fx, n: s.n, side: u.side, uid: u.id, turns: (s.turns || 2) + 1 });
       refreshFields();
       // 施放當下先結算一次，不然要等對方回合才有效果
       await fieldHit(FIELDS[FIELDS.length - 1]);
@@ -1456,12 +1456,18 @@ async function monsterPhase() {
     if (m.camp !== lastCam) { lastCam = m.camp; await moveCam(m.x, m.y); }
     m.turned = false;
     for (const k in m.cds) if (m.cds[k] > 0) m.cds[k]--;
+    // 怪物沒有「自己的回合」可以掛勾，狀態的持續時間跟解除就放在這裡結算——
+    // 之前完全沒呼叫過，玩家對怪物上的暈眩/定身/冰凍/中毒/減速全部永遠不會消失
+    await tickStatus(m);
+    if (!m.alive || G.over) continue;               // tickStatus 的持續傷害有可能打死牠
+    if (!canActU(m)) continue;                       // 暈眩/冰凍/恐懼：這回合什麼都不能做
 
-
-    // 找最近的英雄（同距離取 id 小的，兩邊才會算出一樣的結果）
+    // 找最近的英雄（同距離取 id 小的，兩邊才會算出一樣的結果）——被嘲諷的話只能鎖嘲諷來源
+    const lock = tauntTid(m);
     let tgt = null, bd = 1e9;
     for (const u of alive()) {
       if (u.side === 2) continue;
+      if (lock && u.id !== lock) continue;
       const d = dist(u, m);
       if (d < bd || (d === bd && tgt && u.id < tgt.id)) { bd = d; tgt = u; }
     }
@@ -1486,6 +1492,7 @@ async function monsterPhase() {
       await mAttack(m, tgt);
       continue;
     }
+    if (!canMoveU(m)) continue;   // 定身：打不到就乾脆站著，不能硬走過去
     // 走過去
     const r = reachOf(m);
     const hit = stopToHit(r, m, tgt.x, tgt.y);
@@ -1506,6 +1513,7 @@ async function monsterPhase() {
 }
 
 async function mAttack(m, tgt) {
+  if (!canAtkU(m)) { floatText(m.x, m.y, '繳械', 'up'); return; }   // 少見，但玩家的繳械技能也能打怪
   await strike(m, tgt);
   if (tgt.hp <= 0) { await die(tgt, m); return; }
   if (canCounter(m, tgt)) {

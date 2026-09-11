@@ -39,7 +39,8 @@ const ST = {
   guarded:{ n: '護衛', good: 1, d: '受到的部分傷害改由守護者承擔' },
   mitig:  { n: '絕對防禦', good: 1, d: '受到的傷害直接減少一個百分比' },
   immune: { n: '無敵', good: 1, d: '免疫所有傷害' },
-  rip:    { n: '反擊架式', good: 1, d: '反擊傷害提升' }
+  rip:    { n: '反擊架式', good: 1, d: '反擊傷害提升' },
+  resist: { n: '硬控抗性', good: 1, d: '中硬控（暈眩/定身/冰凍/沉默/恐懼）的時間減半' }
 };
 
 const s = (id, pct, turns, val) => ({ id, pct, turns, val });
