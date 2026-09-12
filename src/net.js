@@ -2,7 +2,7 @@
    出手方把「做了什麼」送過去，兩邊跑同一套 runAction。
    所有牽涉亂數的地方都走 grng（同一個種子），所以不必傳骰子結果。 */
 
-let net = { peer: null, conn: null, host: false };
+let net = { peer: null, conn: null, host: false, usingRelay: false };
 let netQ = Promise.resolve(), ready = Promise.resolve();
 const PREFIX = 'wztac2-';
 const CODEC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -24,6 +24,66 @@ const ICE_CONFIG = {
     { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
   ]
 };
+
+// 自架 WebSocket 中繼伺服器（見 relay-server.js）：兩邊各自對這個公開 IP
+// 發起一般的 outbound WebSocket 連線，完全不用 STUN/TURN 協商，繞開「階段
+// 2」P2P 中繼卡住的問題。空字串代表沒設定，直接跳過、只用 PeerJS。
+// 換成自己的 VM 位址，例如 'ws://123.45.67.89:8080'。
+const WS_RELAY_URL = '';
+const WS_RELAY_TIMEOUT = 6000;   // 連中繼伺服器本身要多快沒回應就放棄、改走 PeerJS
+
+// 把裸的 WebSocket 包成跟 PeerJS DataConnection 一樣的介面（.send()／.on()／
+// .open），這樣 hookConn() 跟其餘所有遊戲邏輯完全不用管底層是哪種傳輸方式。
+function wsAdapter(ws) {
+  const handlers = {};
+  const on = (ev, cb) => { (handlers[ev] = handlers[ev] || []).push(cb); };
+  const fire = (ev, ...args) => { (handlers[ev] || []).forEach(cb => { try { cb(...args); } catch (e) { console.error(e); } }); };
+  const c = {
+    open: false,
+    send: o => { try { ws.send(JSON.stringify(o)); } catch (e) {} },
+    // 如果 open 事件在註冊之前就已經發生過（理論上不會，但跟 PeerJS 的行為
+    // 對齊，晚註冊也補放一次），避免漏接。
+    on: (ev, cb) => { on(ev, cb); if (ev === 'open' && c.open) setTimeout(cb, 0); }
+  };
+  ws.onmessage = e => {
+    let m; try { m = JSON.parse(e.data); } catch (err) { return; }
+    if (m.t === '_ready') return;                                  // 純粹是連線探測用，見 wsTryConnect
+    if (m.t === '_peer_join') { c.open = true; fire('open'); }
+    else if (m.t === '_peer_left') { c.open = false; fire('close'); }
+    else fire('data', m);
+  };
+  ws.onclose = () => { c.open = false; fire('close'); };
+  ws.onerror = () => fire('error', { type: 'ws-error' });
+  c.close = () => { try { ws.close(); } catch (e) {} };
+  return c;
+}
+
+// 嘗試連上中繼伺服器並登記房號，resolve 的時機是「伺服器確認房號登記成功」
+// （收到 _ready），不是「對方也連上了」——那個之後透過回傳物件的 'open'
+// 事件（對應伺服器的 _peer_join）另外通知，走法跟 PeerJS 的
+// signaling-open／connection-open 兩階段是對齊的。
+function wsTryConnect(url, room, role, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    if (!url) { reject(new Error('no relay configured')); return; }
+    let ws, settled = false;
+    const done = ok => {
+      if (settled) return;
+      settled = true; clearTimeout(timer);
+      if (ok) resolve(wsAdapter(ws)); else { try { ws.close(); } catch (e) {} reject(new Error('relay unreachable')); }
+    };
+    try {
+      ws = new WebSocket(url + '?room=' + encodeURIComponent(room) + '&role=' + role);
+    } catch (e) { reject(e); return; }
+    const timer = setTimeout(() => done(false), timeoutMs);
+    const onFirst = e => {
+      let m; try { m = JSON.parse(e.data); } catch (err) { return; }
+      if (m.t === '_ready') { ws.removeEventListener('message', onFirst); done(true); }
+    };
+    ws.addEventListener('message', onFirst);
+    ws.onerror = () => done(false);
+    ws.onclose = () => done(false);
+  });
+}
 
 function netSend(o) { if (net.conn && net.conn.open) try { net.conn.send(o); } catch (e) {} }
 
@@ -115,8 +175,11 @@ async function onNetData(m) {
 
 // 收拾目前的連線嘗試 —— 換頁面、按返回、或重新按一次建立/加入之前都要先呼叫，
 // 不然舊的 Peer 物件還留著，新舊兩個連線嘗試會同時搶著改 net.conn，狀態會亂掉。
+// 名字還叫 destroyPeer 是歷史包袱，現在兩種傳輸方式（PeerJS／中繼 WebSocket）
+// 都靠這個清乾淨——net.conn 不管底層是哪一種，只要有 close() 就呼叫。
 function destroyPeer() {
   clearConnTimer();
+  if (net.conn && net.conn.close) { try { net.conn.close(); } catch (e) {} }
   if (net.peer) { try { net.peer.destroy(); } catch (e) {} net.peer = null; }
   net.conn = null;
 }
@@ -135,6 +198,10 @@ const CONN_TIMEOUT = 25000;
 //           跟 WebRTC/TURN 完全無關，通常是防火牆擋掉那個網域或 WebSocket）。
 //   階段 2：信令有連上（雙方都找得到對方），但 P2P／TURN 中繼交握一直沒完成——
 //           這一步才是 STUN/TURN、對稱式 NAT 那些在起作用。
+// 兩套傳輸各自試：先試自架中繼（WS_RELAY_URL 有設定的話），失敗或沒設定
+// 就退回 PeerJS+TURN。兩套都失敗機率很低（要嘛中繼伺服器沒設定/連不到，
+// 嘛剛好雙方的網路都擋掉了 WebRTC），對「自己人開房間打」這種場景已經
+// 兩層保險。
 function startHost() {
   destroyPeer();
   const code = mkCode();
@@ -142,6 +209,25 @@ function startHost() {
   $('mWait').classList.remove('hide');
   $('roomCode').textContent = code;
   net.host = true;
+  $('mWaitNote').textContent = '連線中…';
+  wsTryConnect(WS_RELAY_URL, code, 'host', WS_RELAY_TIMEOUT).then(c => {
+    net.usingRelay = true;
+    hookConn(c);
+    $('mWaitNote').textContent = '房間已開啟，等待對手加入…';
+    c.on('open', () => {
+      clearConnTimer();
+      const fresh = !$('menu').classList.contains('hide');
+      if (fresh) { mode = 'online'; myTeam = 0; hostPick = null; guestPick = null; hostPickFlow(); }
+    });
+    // 房主端不主動放棄（對方可能過一陣子才把房號傳過去），只提示還在等
+    connTimer = setTimeout(() => {
+      if (!net.conn || !net.conn.open) $('mWaitNote').textContent = '中繼伺服器連上了，但對手一直連不進來，請對方確認房號、或換個網路再試';
+    }, CONN_TIMEOUT);
+  }).catch(() => startHostPeer(code));
+}
+
+function startHostPeer(code) {
+  net.usingRelay = false;
   let signaled = false;
   net.peer = new Peer(PREFIX + code, { debug: 0, config: ICE_CONFIG });
   net.peer.on('open', () => { signaled = true; $('mWaitNote').textContent = '房間已開啟，等待對手加入…'; });
@@ -169,6 +255,26 @@ function startJoin() {
   destroyPeer();
   $('mNetNote').textContent = '連線中…';
   net.host = false;
+  wsTryConnect(WS_RELAY_URL, code, 'guest', WS_RELAY_TIMEOUT).then(c => {
+    net.usingRelay = true;
+    hookConn(c);
+    let paired = false;
+    c.on('open', () => { paired = true; clearConnTimer(); mode = 'online'; myTeam = 1; guestPickFlow(); });
+    // 中繼伺服器連得到，但房號一直配對不到對方——多半是房主那邊退回了
+    // PeerJS（例如房主的網路連不到這台中繼），這裡也跟著改走 PeerJS，
+    // 不然兩邊會卡在各用各的傳輸方式、永遠碰不到面。
+    connTimer = setTimeout(() => {
+      if (paired) return;
+      if (net.conn && net.conn.close) net.conn.close();
+      net.conn = null;
+      startJoinPeer(code);
+    }, CONN_TIMEOUT);
+  }).catch(() => startJoinPeer(code));
+}
+
+function startJoinPeer(code) {
+  net.usingRelay = false;
+  $('mNetNote').textContent = '連線中…';
   let signaled = false;
   net.peer = new Peer({ debug: 0, config: ICE_CONFIG });
   net.peer.on('open', () => {

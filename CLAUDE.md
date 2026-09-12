@@ -403,17 +403,29 @@
 
 ## 已出但沒辦法在單機驗證的修正
 
-- **跨網路連線逾時，現在確定卡在哪一階段了**：commit `d5ae9d7` 把逾時
-  訊息拆成階段 1（連不上信令伺服器）/ 階段 2（信令沒問題但 P2P/TURN
-  交握卡住）。**使用者這輪回報是階段 2**——signaling 沒問題，兩邊都
-  找得到對方，但 P2P／TURN 中繼一直建立不起來。目前已經上了兩組 TURN
-  （PeerJS 內建 + Open Relay Project 免費公開服務），還是卡住，最大
-  嫌疑是**免費 TURN 服務本身不夠穩定**（常見的已知限制：流量/連線數
-  被限速、伺服器不穩），不是設定寫錯。下一步如果還要繼續查，比較實際
-  的方向是換一組更穩定的 TURN（通常要花錢，例如自架 coturn 或用
-  Twilio/Metered.ca 的付費方案），免費方案很難再往上優化太多——
-  這點已經在聊天裡跟使用者說明過，等使用者決定要不要往這個方向投入
-  再繼續。這個問題沒辦法在單機環境重現，只能靠使用者回報繼續縮小範圍。
+- **跨網路連線逾時（階段 2：P2P/TURN 卡住）——已加自架中繼備援解決**：
+  之前查到免費 TURN（PeerJS 內建 + Open Relay Project）不夠穩定，
+  下一步建議是換更穩定的 TURN 或自架 coturn（通常要付費）。使用者選了
+  另一條路：自己在 Oracle Cloud 的 Always Free 額度上架一台 Ampere A1
+  VM，跑一個純 WebSocket 中繼伺服器（`relay-server.js`，新增檔案，
+  Node.js + `ws`，不用框架）。這不是 TURN，是完全繞開 WebRTC NAT
+  穿透的方案——兩邊都對這台公網主機發起普通的 outbound WebSocket
+  連線，伺服器單純轉發訊息，沒有 STUN/TURN 協商這一步，穩定性遠高於
+  免費 TURN。`net.js` 新增 `wsAdapter()`／`wsTryConnect()`，把裸的
+  WebSocket 包成跟 PeerJS `DataConnection` 一樣的介面
+  （`.send()`／`.on('open'|'data'|'close')`／`.open`），`hookConn()`
+  跟其餘所有遊戲邏輯完全不用改。`startHost()`/`startJoin()` 改成先試
+  中繼（`WS_RELAY_URL` 有設定的話，短逾時），連不到才退回原本的
+  PeerJS+TURN 路徑（兩套都留著，互為備援）；guest 端額外處理「中繼連
+  得到但一直配對不到對方」的情況（多半是房主那邊退回了 PeerJS），逾時
+  後也跟著改走 PeerJS，避免兩邊各用各的傳輸方式永遠碰不到面。
+  `WS_RELAY_URL` 預設空字串，不影響原本沒架中繼的使用者。
+  本機用真的 WebSocket relay server（本地跑 `relay-server.js`）＋兩個
+  瀏覽器分頁完整測過：配對、真正的遊戲訊息轉發（結束回合同步）、斷線
+  偵測、同房號重新連線全部驗證通過；也測過中繼伺服器連不到時正確且
+  瞬間（不用等逾時）退回 PeerJS。**待辦**：`WS_RELAY_URL` 需要使用者
+  填入自己 VM 的實際位址才會真的啟用，目前是空字串（純 PeerJS，行為
+  跟改之前一樣）。
 
 ## 停在「文本討論」階段、還沒有具體行動的方向
 

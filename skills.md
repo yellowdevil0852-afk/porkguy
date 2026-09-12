@@ -1645,3 +1645,64 @@ console 乾淨。
 驗證：主控台把同一隻怪物的等級從 1 調到 20，確認倍率跟血量/攻擊力
 正確依等級曲線變化；把 `G.turn` 從 1 改到 50、等級不變，確認算出來的
 數值完全一樣（改動前的版本這裡會不一樣）。
+
+## 四十、線上對戰新增自架 WebSocket 中繼備援（解決 P2P/TURN 卡住的老問題）
+
+之前查到跨網路連線常卡在「階段 2」——PeerJS signaling 沒問題，但
+P2P/TURN 交握卡住，兩組免費 TURN（PeerJS 內建 + Open Relay Project）
+都不夠穩定，建議方向是換更穩的 TURN（通常要付費）。使用者找到另一條
+免費路：Oracle Cloud 的 Always Free 額度（2 OCPU/12GB 的 Ampere A1）
+架一台 VM，跑一個簡單的 WebSocket 中繼伺服器。
+
+這不是 TURN，是完全不同的思路——不用 STUN/TURN 協商出一條 P2P
+資料通道，而是兩邊都對這台公網主機發起普通的 outbound WebSocket
+連線，伺服器單純轉發訊息（client-server relay，不是 P2P）。這種連線
+幾乎不會被防火牆擋（跟開網頁沒兩樣），對一款回合制遊戲來說多一跳的
+延遲完全無感，換來的穩定性比免費 TURN 高得多。
+
+### 新增 `relay-server.js`（獨立檔案，不會被 build.js 打包進遊戲本體）
+
+純 Node.js + `ws`，不用任何框架。協定：連線網址帶 `?room=房號&role=host`
+或 `role=guest`，伺服器收到就回 `{t:'_ready'}`（純粹是「中繼伺服器連得到」
+的探測訊號），同一房間兩個角色都連上時雙方各收到 `{t:'_peer_join'}`，
+其中一邊斷線另一邊收到 `{t:'_peer_left'}`。除了這三種底線開頭的控制
+訊息，其他訊息（遊戲本來的 `{t:'act',...}` 之類）原封不動轉給房間裡的
+另一邊，伺服器完全不解析遊戲內容。同一個角色重新連線（斷線重連）會
+直接取代舊連線，不會卡住配對。用 15 秒心跳 ping/pong 抓「TCP 還在但
+對方其實已經斷網」的殭屍連線。
+
+### `net.js` 改動：兩套傳輸共用同一個介面，遊戲邏輯完全不用碰
+
+新增 `wsAdapter(ws)`：把裸的瀏覽器 `WebSocket` 包成跟 PeerJS
+`DataConnection` 一樣的介面（`.send(obj)`、`.on('open'|'data'|'close', cb)`、
+`.open`），而且 `.on()` 支援同一個事件掛多個 callback（原本只掛一個會
+互相蓋掉，這裡改成陣列存，跟真正的 EventEmitter 語意一致）。
+`wsTryConnect(url, room, role, timeoutMs)` 負責建立連線並等 `_ready`，
+成功就回傳包好的介面物件，失敗（連不到、逾時、房號沒設定）就
+reject——因為介面完全一樣，`hookConn()`、`netSend()`、`onNetData()`、
+`serialize()`/`applySync()` 這些原本管遊戲邏輯的函式一行都不用改，
+不管底層是 PeerJS 還是 WebSocket 都直接沿用。
+
+`startHost()`/`startJoin()` 改成兩階段：先試 `WS_RELAY_URL`（新常數，
+預設空字串＝不啟用），有設定就先嘗試中繼，短逾時（`WS_RELAY_TIMEOUT
+=6000`）內連不到就退回原本的 PeerJS+TURN 路徑（拆成 `startHostPeer()`/
+`startJoinPeer()`，邏輯完全沒動，純粹搬過去當 fallback）。房主端維持
+原本「不主動放棄，只是提示還在等」的行為；客人端多處理一種情況——
+中繼伺服器連得到、但房號一直配對不到對方，多半代表房主那邊的中繼
+連不上、已經退回 PeerJS 了，這裡逾時後也跟著改走 PeerJS，避免兩邊
+各自用不同傳輸方式、永遠碰不到面。`destroyPeer()`（清乾淨重連狀態用，
+名字沒改但現在兩種傳輸都認得）也一起補上關閉 WebSocket 的邏輯。
+
+驗證：本機跑真正的 `relay-server.js`，開兩個瀏覽器分頁模擬房主／客人，
+完整測過房間配對、真的遊戲動作（結束回合）透過中繼正確同步雙方
+`G.cur`、其中一邊斷線另一邊正確顯示「已斷線」、同房號重新連線正確
+恢復「線上」狀態；另外測過中繼伺服器完全連不到的情況，確認會在
+`WS_RELAY_TIMEOUT` 內正確退回 PeerJS（沒設定 `WS_RELAY_URL` 的情況
+是瞬間退回，不用等逾時，現有沒架中繼的使用者完全無感）。
+
+**使用方式**：把 `net.js` 開頭的 `WS_RELAY_URL` 改成自己 VM 的位址
+（例如 `ws://1.2.3.4:8080`），在 VM 上 `npm install ws` 後
+`node relay-server.js`（建議搭配 `pm2` 開機自動啟動），改完
+`node build.js` 重新打包。目前發布的版本 `WS_RELAY_URL` 是空字串，
+純 PeerJS，行為跟這批之前完全一樣——要真的啟用中繼備援還需要使用者
+填入自己主機的位址。

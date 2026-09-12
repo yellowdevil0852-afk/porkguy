@@ -83,6 +83,16 @@ base64 模型一起塞進 `src/index.html` 的佔位符：
 對方需要**同一個 `porkguy.html`** 加上網路；房主開房間拿 6 碼房號，對方輸入房號就連上，
 兩邊各自選三個職業，湊齊了房主才開局。
 
+**自架中繼備援（選用）**：兩邊都在對稱式 NAT 後面時，WebRTC 的 P2P/TURN
+交握偶爾會卡住連不起來。`relay-server.js`（純 Node.js + `ws`，不用框架）
+是一個簡單的 WebSocket 中繼伺服器，架在自己的一台公網主機上（例如
+Oracle Cloud Always Free 的 Ampere A1 執行個體），把 `src/net.js` 開頭的
+`WS_RELAY_URL` 改成自己主機的位址（例如 `ws://1.2.3.4:8080`），連線時
+兩邊會先試中繼、連不到才退回 PeerJS+TURN，兩套互為備援。部署方式：
+`npm install ws`、`node relay-server.js`（預設埠 8080，可用環境變數
+`PORT` 改），建議搭配 `pm2` 開機自動啟動。`WS_RELAY_URL` 留空（預設）
+就完全不會用到這個功能，行為跟原本一樣。
+
 想做到「丟個網址就能玩」，把 `porkguy.html` 上傳到任何靜態空間即可（GitHub Pages / Netlify Drop / itch.io）。
 單檔沒有相依，上傳完直接就是一個網址；順便也解決 `file://` 下某些瀏覽器存不了設定的問題。
 
@@ -145,6 +155,11 @@ PeerJS 的公共信令伺服器牽線，之後 WebRTC 點對點。**所有遊戲
 同一個種子化的 `grng`**，兩邊執行同樣的動作序列就會得到同樣的結果，所以只要傳
 「做了什麼」，不必傳骰子結果。地圖也是由種子生成的，連線時只傳種子。
 重新連線時主機會補送一份完整局面（`serialize()` / `applySync()`）。
+
+`hookConn()`／`netSend()`／`onNetData()` 這層完全不管底層是 PeerJS 還是
+WebSocket，兩種傳輸方式共用同一份介面（`.send()`／`.on('open'|'data'|'close', cb)`／
+`.open`）——`wsAdapter()`（`net.js`）把裸的 `WebSocket`包成這個介面，所以
+新增「自架中繼備援」時完全不用碰遊戲邏輯本身，見上面「線上對戰」那節。
 
 
 
