@@ -5998,6 +5998,10 @@ function placeChests() {
 
 let scene, camera, renderer, clock, raycaster;
 let groundGroup, propGroup, unitGroup, fxGroup, overlayGroup;
+// 鏡頭附近目前看得到的單位（animate() 每幀重算）——raycast 揀選只丟這份名單，
+// 不要整包 unitGroup.children：three.js 的 raycast 不看 .visible，物件在場景裡
+// 就會被測，大地圖幾百隻怪全部丟下去做遞迴相交測試，滑鼠一動就整包算一次。
+let visUnits = [];
 let sun, tilePick = [];                  // InstancedMesh -> 每個 instance 對應的格子
 const MODELS = {}, CLIPS = [];
 let camAz = Math.PI * 0.25, camEl = 0.85, camDist = 34;
@@ -6647,7 +6651,7 @@ function ringFX(x, y, col, r1, life, dy) {
   tween(life * 1000, k => {
     m.scale.setScalar(0.3 + k * r1);
     m.material.opacity = 0.95 * (1 - k);
-  }).then(() => { fxGroup.remove(m); m.geometry.dispose(); });
+  }).then(() => { fxGroup.remove(m); m.geometry.dispose(); m.material.dispose(); });
 }
 
 // 從天而降 / 往上竄的光柱
@@ -6663,7 +6667,7 @@ function column(x, y, col, life, rad) {
   tween((life || 0.6) * 1000, k => {
     m.material.opacity = 0.7 * (1 - k);
     m.scale.set(1 + k * 0.5, 1, 1 + k * 0.5);
-  }).then(() => { fxGroup.remove(m); m.geometry.dispose(); });
+  }).then(() => { fxGroup.remove(m); m.geometry.dispose(); m.material.dispose(); });
 }
 
 // 兩點之間的一道光束
@@ -6679,7 +6683,7 @@ function beam(ax, ay, bx, by, col, w, life) {
   m.lookAt(b); m.rotateX(Math.PI / 2);
   fxGroup.add(m);
   tween((life || 0.28) * 1000, k => { m.material.opacity = 0.95 * (1 - k); })
-    .then(() => { fxGroup.remove(m); m.geometry.dispose(); });
+    .then(() => { fxGroup.remove(m); m.geometry.dispose(); m.material.dispose(); });
 }
 
 // 揮砍的弧線
@@ -6696,7 +6700,7 @@ function arcFX(u, col, big) {
     m.material.opacity = 1 - k;
     m.rotation.z = -1.4 + k * 2.8;
     m.scale.setScalar(0.8 + k * 0.5);
-  }).then(() => { fxGroup.remove(m); m.geometry.dispose(); });
+  }).then(() => { fxGroup.remove(m); m.geometry.dispose(); m.material.dispose(); });
 }
 
 // 套在單位身上的泡泡（護盾之類）
@@ -6712,7 +6716,7 @@ function bubble(u, col, life) {
   tween((life || 0.7) * 1000, k => {
     m.material.opacity = 0.45 * (1 - k);
     m.scale.setScalar(0.5 + k * 0.7);
-  }).then(() => { u.view && u.view.g.remove(m); m.geometry.dispose(); });
+  }).then(() => { u.view && u.view.g.remove(m); m.geometry.dispose(); m.material.dispose(); });
 }
 
 /* ── 每個技能的配方 ── */
@@ -9333,6 +9337,10 @@ function projectTags() {
   for (const u of G.units) {
     if (!u.tag) continue;
     if (!u.alive || !u.view) { u.tag.style.display = 'none'; continue; }
+    // animate() 每幀已經算過鏡頭附近誰看得到（u.view.g.visible），這裡直接借用
+    // 那個結果先跳過看不到的單位，不用再對每個遠處單位跑一次仇恨範圍掃描
+    // （下面 alive().some(...)）加投影矩陣運算——大地圖單位一多這個差很大。
+    if (!u.view.g.visible) { u.tag.style.display = 'none'; continue; }
     if (SET.tagMode === 'off' && u !== hoverUnit && u !== sel) { u.tag.style.display = 'none'; continue; }
     if (SET.tagMode === 'hurt' && u.hp >= mhpOf(u) && u !== hoverUnit && u !== sel) {
       u.tag.style.display = 'none'; continue;
@@ -10556,7 +10564,9 @@ function pickTile(ev) {
   const m = new THREE.Vector2((ev.clientX / innerWidth) * 2 - 1, -(ev.clientY / innerHeight) * 2 + 1);
   raycaster.setFromCamera(m, camera);
   let best = null, bd = 1e9;
-  for (const h of raycaster.intersectObjects(unitGroup.children, true)) {
+  // 只丟鏡頭附近目前看得到的單位去測——three.js 的 raycast 不看 .visible，
+  // 整包 unitGroup.children 丟下去的話，大地圖幾百隻怪不管看不看得到全部都會被測。
+  for (const h of raycaster.intersectObjects(visUnits, true)) {
     let o = h.object;
     while (o) { if (o.userData.uid !== undefined) { const u = byId(o.userData.uid); if (u && u.alive) return [u.x, u.y]; } o = o.parent; }
   }
@@ -10745,7 +10755,10 @@ document.addEventListener('visibilitychange', () => {
 
 function bindInput() {
   const el = renderer.domElement;
-  let down = null, dragged = false;
+  let down = null, dragged = false, lastHoverT = 0;
+  // onHover 會做 raycast 揀選，滑鼠原生 pointermove 頻率遠高於畫面真的需要更新
+  // 提示的頻率，節流到約 30Hz，大地圖單位一多也不會每動一下滑鼠就整包重算。
+  const HOVER_MS = 33;
 
   el.addEventListener('pointerdown', e => {
     down = { x: e.clientX, y: e.clientY, btn: e.button, az: camAz, el: camEl };
@@ -10753,7 +10766,13 @@ function bindInput() {
     hideTileTip();
   });
   addEventListener('pointermove', e => {
-    if (!down) { if (!busy) onHover(e); return; }
+    if (!down) {
+      if (!busy) {
+        const t = performance.now();
+        if (t - lastHoverT >= HOVER_MS) { lastHoverT = t; onHover(e); }
+      }
+      return;
+    }
     const dx = e.clientX - down.x, dy = e.clientY - down.y;
     if (Math.abs(dx) + Math.abs(dy) > 5) dragged = true;
     if (!dragged) return;
@@ -11463,12 +11482,15 @@ function animate() {
   // 各自一個 draw call，光是遠處那些平常看不到的也丟給 GPU 處理會很拖幀率。
   // 選中/滑鼠指到的單位不管多遠都維持可見，不然選單位之後鏡頭還沒轉過去會憑空消失。
   const R2 = (camDist * 1.4 + 24) ** 2;
+  visUnits.length = 0;
   for (const u of G.units) {
     if (!u.view) continue;
     const p = u.view.g.position;
     const dx = p.x - camTarget.x, dz = p.z - camTarget.z;
     const near = dx * dx + dz * dz < R2;
-    u.view.g.visible = near || u === sel || u === hoverUnit;
+    const vis = near || u === sel || u === hoverUnit;
+    u.view.g.visible = vis;
+    if (vis) visUnits.push(u.view.g);
     if (near || performance.now() - u.view.lastPlay < 2500) u.view.mixer.update(dt);
   }
   panStep(dt);

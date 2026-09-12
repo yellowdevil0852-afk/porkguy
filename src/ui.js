@@ -34,6 +34,10 @@ function projectTags() {
   for (const u of G.units) {
     if (!u.tag) continue;
     if (!u.alive || !u.view) { u.tag.style.display = 'none'; continue; }
+    // animate() 每幀已經算過鏡頭附近誰看得到（u.view.g.visible），這裡直接借用
+    // 那個結果先跳過看不到的單位，不用再對每個遠處單位跑一次仇恨範圍掃描
+    // （下面 alive().some(...)）加投影矩陣運算——大地圖單位一多這個差很大。
+    if (!u.view.g.visible) { u.tag.style.display = 'none'; continue; }
     if (SET.tagMode === 'off' && u !== hoverUnit && u !== sel) { u.tag.style.display = 'none'; continue; }
     if (SET.tagMode === 'hurt' && u.hp >= mhpOf(u) && u !== hoverUnit && u !== sel) {
       u.tag.style.display = 'none'; continue;
@@ -1257,7 +1261,9 @@ function pickTile(ev) {
   const m = new THREE.Vector2((ev.clientX / innerWidth) * 2 - 1, -(ev.clientY / innerHeight) * 2 + 1);
   raycaster.setFromCamera(m, camera);
   let best = null, bd = 1e9;
-  for (const h of raycaster.intersectObjects(unitGroup.children, true)) {
+  // 只丟鏡頭附近目前看得到的單位去測——three.js 的 raycast 不看 .visible，
+  // 整包 unitGroup.children 丟下去的話，大地圖幾百隻怪不管看不看得到全部都會被測。
+  for (const h of raycaster.intersectObjects(visUnits, true)) {
     let o = h.object;
     while (o) { if (o.userData.uid !== undefined) { const u = byId(o.userData.uid); if (u && u.alive) return [u.x, u.y]; } o = o.parent; }
   }
@@ -1446,7 +1452,10 @@ document.addEventListener('visibilitychange', () => {
 
 function bindInput() {
   const el = renderer.domElement;
-  let down = null, dragged = false;
+  let down = null, dragged = false, lastHoverT = 0;
+  // onHover 會做 raycast 揀選，滑鼠原生 pointermove 頻率遠高於畫面真的需要更新
+  // 提示的頻率，節流到約 30Hz，大地圖單位一多也不會每動一下滑鼠就整包重算。
+  const HOVER_MS = 33;
 
   el.addEventListener('pointerdown', e => {
     down = { x: e.clientX, y: e.clientY, btn: e.button, az: camAz, el: camEl };
@@ -1454,7 +1463,13 @@ function bindInput() {
     hideTileTip();
   });
   addEventListener('pointermove', e => {
-    if (!down) { if (!busy) onHover(e); return; }
+    if (!down) {
+      if (!busy) {
+        const t = performance.now();
+        if (t - lastHoverT >= HOVER_MS) { lastHoverT = t; onHover(e); }
+      }
+      return;
+    }
     const dx = e.clientX - down.x, dy = e.clientY - down.y;
     if (Math.abs(dx) + Math.abs(dy) > 5) dragged = true;
     if (!dragged) return;

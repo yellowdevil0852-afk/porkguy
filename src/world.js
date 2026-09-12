@@ -241,6 +241,10 @@ function placeChests() {
 
 let scene, camera, renderer, clock, raycaster;
 let groundGroup, propGroup, unitGroup, fxGroup, overlayGroup;
+// 鏡頭附近目前看得到的單位（animate() 每幀重算）——raycast 揀選只丟這份名單，
+// 不要整包 unitGroup.children：three.js 的 raycast 不看 .visible，物件在場景裡
+// 就會被測，大地圖幾百隻怪全部丟下去做遞迴相交測試，滑鼠一動就整包算一次。
+let visUnits = [];
 let sun, tilePick = [];                  // InstancedMesh -> 每個 instance 對應的格子
 const MODELS = {}, CLIPS = [];
 let camAz = Math.PI * 0.25, camEl = 0.85, camDist = 34;

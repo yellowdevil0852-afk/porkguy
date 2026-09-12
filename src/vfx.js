@@ -115,7 +115,7 @@ function ringFX(x, y, col, r1, life, dy) {
   tween(life * 1000, k => {
     m.scale.setScalar(0.3 + k * r1);
     m.material.opacity = 0.95 * (1 - k);
-  }).then(() => { fxGroup.remove(m); m.geometry.dispose(); });
+  }).then(() => { fxGroup.remove(m); m.geometry.dispose(); m.material.dispose(); });
 }
 
 // 從天而降 / 往上竄的光柱
@@ -131,7 +131,7 @@ function column(x, y, col, life, rad) {
   tween((life || 0.6) * 1000, k => {
     m.material.opacity = 0.7 * (1 - k);
     m.scale.set(1 + k * 0.5, 1, 1 + k * 0.5);
-  }).then(() => { fxGroup.remove(m); m.geometry.dispose(); });
+  }).then(() => { fxGroup.remove(m); m.geometry.dispose(); m.material.dispose(); });
 }
 
 // 兩點之間的一道光束
@@ -147,7 +147,7 @@ function beam(ax, ay, bx, by, col, w, life) {
   m.lookAt(b); m.rotateX(Math.PI / 2);
   fxGroup.add(m);
   tween((life || 0.28) * 1000, k => { m.material.opacity = 0.95 * (1 - k); })
-    .then(() => { fxGroup.remove(m); m.geometry.dispose(); });
+    .then(() => { fxGroup.remove(m); m.geometry.dispose(); m.material.dispose(); });
 }
 
 // 揮砍的弧線
@@ -164,7 +164,7 @@ function arcFX(u, col, big) {
     m.material.opacity = 1 - k;
     m.rotation.z = -1.4 + k * 2.8;
     m.scale.setScalar(0.8 + k * 0.5);
-  }).then(() => { fxGroup.remove(m); m.geometry.dispose(); });
+  }).then(() => { fxGroup.remove(m); m.geometry.dispose(); m.material.dispose(); });
 }
 
 // 套在單位身上的泡泡（護盾之類）
@@ -180,7 +180,7 @@ function bubble(u, col, life) {
   tween((life || 0.7) * 1000, k => {
     m.material.opacity = 0.45 * (1 - k);
     m.scale.setScalar(0.5 + k * 0.7);
-  }).then(() => { u.view && u.view.g.remove(m); m.geometry.dispose(); });
+  }).then(() => { u.view && u.view.g.remove(m); m.geometry.dispose(); m.material.dispose(); });
 }
 
 /* ── 每個技能的配方 ── */

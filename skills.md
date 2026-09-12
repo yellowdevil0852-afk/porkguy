@@ -1266,3 +1266,49 @@ K=100/500 會把防禦這個投資方向壓得太扁——重堆防禦的 build 
   `refreshArenaBuffTiles()` 改成查這個表決定光環和光暈顏色。用
   `enterArena()` 直接跳進競技場，縮放鏡頭確認一次畫面同時出現四種
   顏色的光環，互不重複。
+
+## 三十二、效能優化第一批：滑鼠揀選範圍限制/節流、名牌投影提早跳過、特效材質洩漏
+
+使用者反應大地圖幀率偏低，先討論了幾個方案（raycast 沒做範圍限制、單位
+模型開局全部建好不管在不在鏡頭附近、`projectTags()` 每幀全單位掃描、
+陰影設定、特效材質沒 dispose），選了投報率最高的方案 A（兩個子項都做）
+＋方案 C＋補特效材質 dispose，方案 B（懶加載單位模型）先不動。
+
+- **`pickTile()`／`onHover()` 的 raycast 沒有任何範圍限制**：查證發現
+  three.js 的 `Raycaster.intersectObjects()` 完全不看 `.visible`
+  （`$c()`/`intersectObject` 只檢查 `layers`，不檢查可見性），`animate()`
+  原本「鏡頭外的單位設 invisible」那個優化對 raycast 的成本完全沒有幫助
+  ——`pickTile()`（`ui.js`）每次都對 `unitGroup.children` 整包做遞迴相交
+  測試，地圖越大、`unitGroup` 裡的單位越多，成本越高，這正好解釋「只有
+  大地圖才慢」的症狀（128 地圖實測 858 隻單位全部丟給 raycaster）。加上
+  `pointermove` 完全沒節流，滑鼠隨便晃一下就整包重算一次。
+  兩個都修：① 新增 `visUnits`（`world.js`，跟 `unitGroup` 放一起）
+  記錄「鏡頭附近目前看得到的單位」，`animate()`（`main.js`）在原本算
+  `near`/`visible` 的迴圈裡順便塞進這個陣列，`pickTile()` 改成只丟
+  `visUnits` 給 raycaster；② `bindInput()`（`ui.js`）幫 `onHover` 加節流，
+  約 30Hz 上限。128 地圖實測：858 隻存活單位裡 `visUnits` 只有 100 個，
+  raycast 候選數直接砍到 1/8 左右（候選裡每個又是好幾個子網格，實際省下
+  的相交測試次數比這個比例更多）。
+
+- **`projectTags()` 每幀對全部單位重新掃描一輪，沒有借用 `animate()`
+  剛算好的可見性**：`projectTags()`（`ui.js`）緊接在 `animate()` 的可見性
+  迴圈後面執行，但完全是獨立的第二輪全單位掃描，對每個看不到的單位
+  還是照樣跑 `tagMode`/血量比較、`alive().some(...)` 仇恨範圍掃描（每隻
+  睡著的怪物都要跟全部存活英雄算一次距離）、投影矩陣運算，才判斷要不要
+  隱藏名牌。改成迴圈一開頭直接借用 `u.view.g.visible`（`animate()`
+  同一幀已經算好）提早跳過看不到的單位，後面那些比較貴的檢查跟投影
+  運算就不用跑了。大地圖看不到的單位占絕大多數，這個改動同時也修掉一個
+  沒人回報過的小 bug：理論上模型不可見時名牌仍可能因為投影落在畫面內
+  而顯示（模型跟名牌不同步），現在名牌一定跟著模型可見性走。
+
+- **`vfx.js` 五個一次性特效網格（`ringFX`/`column`/`beam`/`arcFX`/
+  `bubble`）只 dispose 幾何體，材質沒有 dispose**：這幾個函式每次呼叫都
+  `new THREE.MeshBasicMaterial(...)`，播完動畫後只呼叫
+  `m.geometry.dispose()`，材質物件從沒釋放。單獨一次影響很小，但大地圖
+  同時打起來的戰鬥更多、特效更密集，長時間連續遊玩會慢慢堆積 GPU
+  資源。五個地方都補上 `m.material.dispose()`。
+
+驗證：128 地圖開一局，console 用 `visUnits.length` vs `unitGroup.children.length`
+確認範圍限制真的有生效（100 vs 858）；正常選取/移動/右鍵地塊資訊/滑鼠
+懸停顯示卡片全部照舊測過一輪，沒有壞掉；手動呼叫 `ringFX`/`column`/
+`beam` 確認補上的 `material.dispose()` 不會噴例外。全程 console 乾淨。
