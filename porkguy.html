@@ -5256,13 +5256,13 @@ const LV_MAX = 30;                                // 跟怪物等級上限對齊
 const XP_NEED = lv => 55 + (lv - 1) * 25;         // Lv1→2 需 55，之後遞增
 const XP_HIT = 12, XP_KILL_PC = 55, XP_HEAL = 14, XP_CNT = 8;
 const XP_SHARE = 0.4, XP_SHARE_R = 3;             // 幾格內的隊友分多少經驗
-const LV_GAIN = { hp: 5, atk: 2, def: 1 };
+const LV_GAIN = { hp: 10, atk: 2, def: 1 };
 const FREE_PTS = 2;                               // 每升一級可自由分配的點數
 // 一點自由屬性點換到的東西
 const PT_GAIN = { atk: 1, def: 1, hp: 8 };
 const PT_N = { atk: '攻擊', def: '防禦', hp: '生命' };
 const MON_GAIN = { hp: 4, atk: 1, def: 1 };      // 怪物的等級成長，刻意比英雄慢
-const PROMO_LV = 5, PROMO = { hp: 12, atk: 4, def: 3, mov: 1 };
+const PROMO_LV = 5, PROMO = { hp: 20, atk: 3, def: 2, mov: 1 };
 
 // ── 裝備 ──
 // 裝備品質跟技能一樣分五階，倍率就是使用者定的 0.6 / 1 / 1.4 / 2 / 2.5
