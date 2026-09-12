@@ -65,8 +65,8 @@ function statOf(u, k) {
   let v = d[k] || 0;
   v += (u.lv - 1) * ((isHero(u) ? LV_GAIN : MON_GAIN)[k] || 0);
   if (!isHero(u) && u.elite && MON_ELITE[k]) v = Math.round(v * MON_ELITE[k]);
-  // 怪物隨回合數小幅成長，見 data.js 的 monScaleFor() 註解
-  if (!isHero(u) && (k === 'hp' || k === 'atk' || k === 'def')) v = Math.round(v * monScaleFor(G.turn));
+  // 怪物依自己的等級小幅成長，見 data.js 的 monScaleFor() 註解
+  if (!isHero(u) && (k === 'hp' || k === 'atk' || k === 'def')) v = Math.round(v * monScaleFor(u.lv));
   if (isHero(u)) {
     if (u.lv >= PROMO_LV) v += PROMO[k] || 0;
     for (const s in u.equip) { const it = u.equip[s]; if (it && it[k]) v += it[k]; }
