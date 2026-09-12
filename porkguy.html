@@ -5950,23 +5950,26 @@ function placeCamps() {
   ensureSafeSpawn();
 }
 
-// 保證每個玩家營地旁邊最近的怪物營地裡，至少有兩群等級落在 4 等以下——
-// 網格抖動本身是隨機的，理論上運氣不好會讓玩家一出生旁邊就是一群啃不動
-// 的高等怪，新手/低等英雄完全無從練起。只調 frac（進而影響 monLvFor()
-// 算出來的等級），不動 tier（怪物種類組成維持原樣，只是等級被壓低）。
+// 保證每個玩家營地「最近的」N 群怪物營地全部落在 4 等以下——網格抖動
+// 本身是隨機的，理論上運氣不好會讓玩家一出生旁邊就是一群啃不動的高等怪，
+// 新手/低等英雄完全無從練起。只調 frac（進而影響 monLvFor() 算出來的
+// 等級），不動 tier（怪物種類組成維持原樣，只是等級被壓低）。
+// 之前的版本是「64 格範圍內只要湊到兩群安全的就收手」——但那兩群常常是
+// 範圍邊緣「本來就因為離王座比較遠而天生低等」的營地，湊到數字就直接
+// break，實際上離出生點最近的那幾群（真正會先撞到的）反而完全沒被
+// 動到，玩家還是覺得「一出生旁邊全是打不動的怪」。改成不管範圍多大，
+// 直接抓「離出生點最近的 N 群」逐一檢查，全部強制壓到 4 等以下。
 function ensureSafeSpawn() {
   const maxLv = MON_MAXLV_BY_SIZE[W] || MON_MAXLV_BY_SIZE[32];
   if (maxLv <= 4) return;                        // 這張地圖本來怪就全部很低級，不用特別處理
   const minFrac = (maxLv - 4) / (maxLv - 1);      // monLvFor(frac) <= 4 所需的最小 frac
+  const SAFE_N = 4;                               // 最近幾群怪物營地要保證安全
   for (const spawn of CAMP) {
-    const near = CAMPS.filter(c => Math.abs(c.x - spawn[0]) + Math.abs(c.y - spawn[1]) <= W / 2)
+    const near = CAMPS.slice()
       .sort((a, b) => (Math.abs(a.x - spawn[0]) + Math.abs(a.y - spawn[1])) -
-                       (Math.abs(b.x - spawn[0]) + Math.abs(b.y - spawn[1])));
-    let ok = near.filter(c => monLvFor(c.frac) <= 4).length;
-    for (const c of near) {
-      if (ok >= 2) break;
-      if (monLvFor(c.frac) > 4) { c.frac = Math.max(c.frac, minFrac); ok++; }
-    }
+                       (Math.abs(b.x - spawn[0]) + Math.abs(b.y - spawn[1])))
+      .slice(0, SAFE_N);
+    for (const c of near) if (monLvFor(c.frac) > 4) c.frac = Math.max(c.frac, minFrac);
   }
 }
 
