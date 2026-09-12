@@ -500,7 +500,7 @@ async function animMove(u, path) {
       refreshTraps();
       await hurt(u, tr.dmg, '陷阱');
       if (!u.alive) return;   // 同上：陷阱傷害打死人的話 u.view 已經被 die() 拆掉了
-      for (const e of tr.st || []) addSt(u, u, e);
+      for (const e of tr.st || []) addSt(u, u, e, '陷阱');
       break;
     }
   }
@@ -564,7 +564,7 @@ async function strike(a, d, opt) {
   const dmg = dmgCalc(a, d, { crit, mult: (opt.mult || 1) * (charged ? 1.3 : 1), noFlank: opt.noFlank });
   if (charged) {
     a.charged = false;
-    addSt(a, a, { id: 'weaken', pct: 0.3, turns: 2 });
+    addSt(a, a, { id: 'weaken', pct: 0.3, turns: 2 }, '蓄力');
   }
   const tag = (crit ? '暴擊 ' : '') + (charged ? '蓄力 ' : '') +
     (opt.noFlank ? '' : flankName(fm) + (flankName(fm) ? ' ' : ''));
@@ -641,7 +641,7 @@ async function die(u, killer) {
     for (const o of alive()) {
       if (o.side !== u.side || o === u) continue;
       healUnit(u, o, Math.round(mhpOf(o) * mt));
-      addSt(o, u, { id: 'shield', pct: 1.0, turns: 2 });
+      addSt(o, u, { id: 'shield', pct: 1.0, turns: 2 }, u.pas && SK[u.pas].n);
     }
     log(`<b>${nameOf(u)}</b> 的殉道治癒了全隊並張開護盾`);
   }
@@ -825,9 +825,9 @@ async function hit(u, t, s, opt) {
   // 技能傷害原本沒有結仇，法師一顆火球把整群怪炸醒不了一個 —— 補上跟普攻一樣的規則
   if (t.side === 2 && t.alive) wakeCamp(t);
 
-  if (!s.stChance || grng() < s.stChance) for (const e of (s.st || [])) addSt(t, u, e);
+  if (!s.stChance || grng() < s.stChance) for (const e of (s.st || [])) addSt(t, u, e, s.n);
   const ae = pasOf(u, 'aoeDebuff');
-  if (ae && opt.aoe) addSt(t, u, ae);
+  if (ae && opt.aoe) addSt(t, u, ae, u.pas && SK[u.pas].n);
 
   // 技能自帶吸血（血腥旋風）：生命低於三成翻倍
   if (s.lifesteal && real > 0) {
@@ -878,13 +878,13 @@ async function onHurtPassives(a, d, real, crit, ranged) {
   }
   // 血腥氣息：造成傷害時機率使目標恐懼（普攻／技能都算）
   const pf = pasOf(a, 'procFear');
-  if (pf && d.alive && real > 0 && grng() < pf) addSt(d, a, { id: 'fear', turns: 1 });
+  if (pf && d.alive && real > 0 && grng() < pf) addSt(d, a, { id: 'fear', turns: 1 }, a.pas && SK[a.pas].n);
   // 戰鬥狂熱：被打一次疊一層，最多五層
   const st = pasOf(d, 'stackOnHurt');
   if (st && d.alive) d.stk = Math.min(st * 5, (d.stk || 0) + st);
   // 復仇之盾 / 荊棘之盾：被近戰打就反傷 + 讓對方流血
   const re = pasOf(d, 'retaliate');
-  if (re && !ranged && d.alive && a.alive) addSt(a, d, re);
+  if (re && !ranged && d.alive && a.alive) addSt(a, d, re, d.pas && SK[d.pas].n);
   const rf = pasOf(d, 'retalFlat');
   if (rf && !ranged && d.alive && a.alive) {
     const v = Math.max(1, Math.round(defOf(d) * rf));
@@ -902,8 +902,8 @@ function lowHpProcCheck(u) {
   if (u.hp / mhpOf(u) >= 0.3) return;
   if (u.cds.__lowhp > 0) return;
   u.cds.__lowhp = 8;
-  addSt(u, u, { id: 'shield', pct: 0.5, turns: 1 });
-  addSt(u, u, { id: 'mov', val: 1, turns: 1 });
+  addSt(u, u, { id: 'shield', pct: 0.5, turns: 1 }, SK[u.pas].n);
+  addSt(u, u, { id: 'mov', val: 1, turns: 1 }, SK[u.pas].n);
   floatText(u.x, u.y, '求生本能', 'up');
 }
 
@@ -912,7 +912,7 @@ function lastStandCheck(u) {
   if (u.hp > 0 || !pasOf(u, 'lastStand') || u.usedStand) return false;
   u.usedStand = 1;
   u.hp = 1;
-  addSt(u, u, { id: 'immune', turns: 1 });
+  addSt(u, u, { id: 'immune', turns: 1 }, SK[u.pas].n);
   floatText(u.x, u.y, '不倒之軀', 'up');
   playFX('holy', u);
   log(`<b>${nameOf(u)}</b> 撐住了最後一口氣`);
@@ -948,7 +948,7 @@ function healUnit(src, t, amt) {
   // 買一送一：治療目標有機率額外得到一個增益
   const hp = pasOf(src, 'healProc');
   if (hp && src !== t && grng() < hp)
-    addSt(t, src, grng() < 0.5 ? { id: 'atk', pct: 0.15, turns: 1 } : { id: 'def', pct: 0.15, turns: 1 });
+    addSt(t, src, grng() < 0.5 ? { id: 'atk', pct: 0.15, turns: 1 } : { id: 'def', pct: 0.15, turns: 1 }, SK[src.pas].n);
   if (pasOf(src, 'linkShare')) t.link = 2;
   gainExp(src, XP_HEAL);
   return h;
@@ -1003,10 +1003,10 @@ async function useSkill(u, id, a) {
       if (s.resetOnKill && dead) u.cds[id] = 0;
       if (s.killAct && dead) killRefresh(u);              // 屠戮：擊殺回復本回合行動
       // 蛛絲箭：對目標周圍一格的敵人也上狀態
-      if (s.aoeSt) for (const o of enemiesIn(u, tgx, tgy, 1)) if (o !== tgt) for (const e of s.aoeSt) addSt(o, u, e);
+      if (s.aoeSt) for (const o of enemiesIn(u, tgx, tgy, 1)) if (o !== tgt) for (const e of s.aoeSt) addSt(o, u, e, s.n);
       // 後撤步：命中後往遠離目標的方向退 N 格
       if (s.retreat) { pushUnit(u, tgx, tgy, s.retreat); u.moved = true; }
-      for (const e of (s.self || [])) addSt(u, u, e);
+      for (const e of (s.self || [])) addSt(u, u, e, s.n);
       break;
     }
     case 'multi': {
@@ -1081,7 +1081,7 @@ async function useSkill(u, id, a) {
         // 火球之類：正中心用 pct，外圈用 edgePct
         const edge = s.edgePct !== undefined && (o.x !== tx || o.y !== ty);
         if (s.pct || edge) await hit(u, o, edge ? { ...s, pct: s.edgePct } : s, { noFlank: 1, aoe: 1 });
-        else for (const e of (s.st || [])) addSt(o, u, e);
+        else for (const e of (s.st || [])) addSt(o, u, e, s.n);
       }
       break;
     }
@@ -1099,7 +1099,7 @@ async function useSkill(u, id, a) {
         if (!o || !o.alive) continue;
         playFX(s.fx, u, o);
         await hit(u, o, { ...s, st: [] }, { noFlank: 1 });
-        if (o.alive && s.stChance) for (const e of (s.st || [])) if (grng() < s.stChance) addSt(o, u, e);
+        if (o.alive && s.stChance) for (const e of (s.st || [])) if (grng() < s.stChance) addSt(o, u, e, s.n);
         await wait(120);
       }
       break;
@@ -1174,7 +1174,7 @@ async function useSkill(u, id, a) {
       u.x = tx; u.y = ty; placeUnit(u);
       playFX('blink', u);
       if (s.cleanseIds) u.st = u.st.filter(x => !s.cleanseIds.includes(x.id));
-      for (const e of (s.self || [])) addSt(u, u, e);
+      for (const e of (s.self || [])) addSt(u, u, e, s.n);
       await openChest(u);
       break;
     }
@@ -1243,7 +1243,7 @@ async function useSkill(u, id, a) {
       const t = tgt || u;
       cast(); await wait(240);
       playFX(s.fx, u, t);
-      addSt(t, u, { id: 'shield', pct: s.pct, turns: 3 });
+      addSt(t, u, { id: 'shield', pct: s.pct, turns: 3 }, s.n);
       floatText(t.x, t.y, '護盾 ' + skillAmt(u, s), 'heal');
       break;
     }
@@ -1260,7 +1260,7 @@ async function useSkill(u, id, a) {
       if (s.cleanseIds) u.st = u.st.filter(x => !s.cleanseIds.includes(x.id));
       // 興奮劑：讓身上其他技能的冷卻也往下減
       if (s.cdAllCut) for (const k in u.cds) if (u.cds[k] > 0) u.cds[k] = Math.max(0, u.cds[k] - s.cdAllCut);
-      for (const e of (s.self || [])) addSt(u, u, e);
+      for (const e of (s.self || [])) addSt(u, u, e, s.n);
       if (s.killRefresh) u.soloTurn = G.turn;
       // 凝霜寶珠：換來無敵的代價是這回合不能再動、不能再出手
       if (s.selfLock) { u.moved = true; u.acted = true; }
@@ -1271,7 +1271,7 @@ async function useSkill(u, id, a) {
       cast(); await wait(280);
       if (s.cleanse) { const b = tgt.st.find(x => !ST[x.id].good); if (b) { tgt.st = tgt.st.filter(x => x !== b); updTag(tgt); } }
       playFX(s.fx, u, tgt);
-      for (const e of (s.give || [])) addSt(tgt, u, e);
+      for (const e of (s.give || [])) addSt(tgt, u, e, s.n);
       break;
     }
     case 'buffAround': {
@@ -1279,10 +1279,10 @@ async function useSkill(u, id, a) {
       playFX(s.fx, u);
       for (const o of alliesIn(u, u.x, u.y, s.r)) {
         if (o === u) continue;
-        for (const e of (s.give || [])) addSt(o, u, e);
+        for (const e of (s.give || [])) addSt(o, u, e, s.n);
         floatText(o.x, o.y, s.n, 'up');
       }
-      for (const e of (s.self || [])) addSt(u, u, e);
+      for (const e of (s.self || [])) addSt(u, u, e, s.n);
       break;
     }
     case 'domain': {
@@ -1290,9 +1290,9 @@ async function useSkill(u, id, a) {
       playFX(s.fx, u);
       for (const o of alliesIn(u, u.x, u.y, s.r)) {
         healUnit(u, o, skillAmt(u, s));
-        for (const e of (s.give || [])) addSt(o, u, e);
+        for (const e of (s.give || [])) addSt(o, u, e, s.n);
       }
-      for (const o of enemiesIn(u, u.x, u.y, s.r)) for (const e of (s.st || [])) addSt(o, u, e);
+      for (const o of enemiesIn(u, u.x, u.y, s.r)) for (const e of (s.st || [])) addSt(o, u, e, s.n);
       break;
     }
     case 'raise': {
@@ -1323,12 +1323,12 @@ async function fieldHit(p) {
   const u = byId(p.uid);
   if (!u) return;
   if (p.pct) for (const o of enemiesIn(u, p.x, p.y, p.r).slice())
-    await hit(u, o, { pct: p.pct, st: p.st || [] }, { noFlank: 1, aoe: 1 });
+    await hit(u, o, { pct: p.pct, st: p.st || [], n: p.n }, { noFlank: 1, aoe: 1 });
   else if (p.st) for (const o of enemiesIn(u, p.x, p.y, p.r).slice())
-    for (const e of p.st) addSt(o, u, e);
+    for (const e of p.st) addSt(o, u, e, p.n);
   if (p.heal || p.give) for (const o of alliesIn(u, p.x, p.y, p.r)) {
     if (p.heal) healUnit(u, o, Math.round(atkOf(u) * p.heal));
-    for (const e of (p.give || [])) addSt(o, u, e);
+    for (const e of (p.give || [])) addSt(o, u, e, p.n);
   }
 }
 

@@ -239,16 +239,16 @@ async function pickupArenaBuff(u) {
   if (preMove && preMove.uid === u.id) preMove = null;
   floatText(u.x, u.y, ARENA_BUFF_N[kind] + '！', 'up');
   if (kind === 'power') {
-    addSt(u, u, { id: 'atk', pct: 0.2, turns: 3 });
+    addSt(u, u, { id: 'atk', pct: 0.2, turns: 3 }, ARENA_BUFF_N[kind]);
     log(`<span class="s${u.side}">${nameOf(u)}</span> 撿到「力量增幅」，攻擊 +20%（3 回合）`);
   } else if (kind === 'charge') {
     u.charged = true;
     log(`<span class="s${u.side}">${nameOf(u)}</span> 撿到「蓄力」，下一次普通攻擊 +30% 傷害`);
   } else if (kind === 'guard') {
-    addSt(u, u, { id: 'shield', pct: 1.5, turns: 3 });
+    addSt(u, u, { id: 'shield', pct: 1.5, turns: 3 }, ARENA_BUFF_N[kind]);
     log(`<span class="s${u.side}">${nameOf(u)}</span> 撿到「守護」，獲得一層護盾（3 回合）`);
   } else if (kind === 'haste') {
-    addSt(u, u, { id: 'mov', val: 2, turns: 2 });
+    addSt(u, u, { id: 'mov', val: 2, turns: 2 }, ARENA_BUFF_N[kind]);
     log(`<span class="s${u.side}">${nameOf(u)}</span> 撿到「迅捷」，移動 +2（2 回合）`);
   }
   await wait(250);

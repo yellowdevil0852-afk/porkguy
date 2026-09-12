@@ -61,9 +61,11 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
 .tt{color:var(--gold)}
 #ucTer{margin-top:7px;padding-top:7px;border-top:1px solid var(--line);font-size:11px;color:var(--dim)}
 .pass{margin-top:4px;color:#9fb4d8}
-.st-list span{margin-right:6px;display:inline-block}
-.st-list .st-g{color:#5fd39a}
-.st-list .st-b{color:#ff6a6a}
+.st-list{display:flex;flex-direction:column;gap:2px}
+.st-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.st-row .st-g{color:#5fd39a}
+.st-row .st-b{color:#ff6a6a}
+.st-src{color:var(--dim);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px}
 #ucEquip{margin-top:7px;padding-top:7px;border-top:1px solid var(--line);font-size:11px}
 .eq{padding:2px 0;color:var(--dim)}
 .eq span{color:var(--dim);font-size:10px}

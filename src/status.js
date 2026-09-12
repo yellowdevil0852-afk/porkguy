@@ -6,7 +6,7 @@
 const ST_STAT = { atk: 'atk', def: 'def', mov: 'mov', weaken: 'atk', sunder: 'def', slow: 'mov' };
 const CTRL = ['stun', 'root', 'silence', 'freeze', 'fear'];
 
-function addSt(u, src, e) {
+function addSt(u, src, e, label) {
   if (!u.alive) return;
   // 不屈意志：控制改成堅甲
   if (ST[e.id].ctrl && pasOf(u, 'ctrlImmune')) {
@@ -40,12 +40,21 @@ function addSt(u, src, e) {
   // 百折不撓：任何負面狀態的持續時間都減半（最少留 1 個實際回合）
   if (!ST[e.id].good && pasOf(u, 'badDurationHalf')) turns = Math.max(1, Math.ceil(turns / 2));
   const old = u.st.find(x => x.id === e.id);
-  if (old && !ST[e.id].dot) { old.v = e.id === 'shield' ? old.v + v : v; old.turns = Math.max(old.turns, turns); }
-  else u.st.push({ id: e.id, v, turns, from: src.id });
+  if (old && !ST[e.id].dot) {
+    old.v = e.id === 'shield' ? old.v + v : v; old.turns = Math.max(old.turns, turns);
+    old.from = src.id; old.skill = label || null;
+  }
+  else u.st.push({ id: e.id, v, turns, from: src.id, skill: label || null });
   updTag(u);
 }
 const hasSt = (u, id) => u.st.some(x => x.id === id);
 const stVal = (u, id) => u.st.reduce((s, x) => s + (x.id === id ? x.v : 0), 0);
+// 狀態面板顯示用：把 v 換算成「+12」或（v 本來就是小數，例如詛咒）「+20%」
+function stAmtStr(v) {
+  if (!v) return '';
+  if (Math.abs(v) < 1) return (v > 0 ? '+' : '') + Math.round(v * 100) + '%';
+  return (v > 0 ? '+' : '') + v;
+}
 const shieldOf = u => Math.max(0, stVal(u, 'shield'));
 const isCtrl = u => u.st.some(x => CTRL.includes(x.id));
 const canMoveU = u => !hasSt(u, 'stun') && !hasSt(u, 'root') && !hasSt(u, 'freeze');

@@ -385,8 +385,14 @@ function showCard(u) {
     (pas ? `<div class="pass"><b class="q${pas.q}">${pas.n}</b>：${pas.d}</div>` : '') +
     // 硬控抗性（resist）是內部記帳用的機制，不是玩家要理解的東西，跟真正的
     // 狀態擠在一起顯示只會讓人誤讀成「怎麼還在被控制」，這裡直接濾掉不顯示
-    (u.st.some(b2 => b2.id !== 'resist') ? `<div class="pass st-list">${u.st.filter(b2 => b2.id !== 'resist').map(b2 =>
-      `<span class="${ST[b2.id].good ? 'st-g' : 'st-b'}">${ST[b2.id].n}（${b2.turns}）</span>`).join('')}</div>` : '');
+    (u.st.some(b2 => b2.id !== 'resist') ? `<div class="pass st-list">${u.st.filter(b2 => b2.id !== 'resist').map(b2 => {
+      const amt = stAmtStr(b2.v);
+      const from = byId(b2.from);
+      // 自己對自己施加的（大部分是自身技能/被動）只顯示技能名，不用再重複自己的名字
+      const who = from && from !== u ? nameOf(from) + (b2.skill ? '・' + b2.skill : '') : (b2.skill || '');
+      return `<div class="st-row"><span class="${ST[b2.id].good ? 'st-g' : 'st-b'}">${ST[b2.id].n}${amt ? ' ' + amt : ''}（${b2.turns}）</span>` +
+        (who ? `<span class="st-src">${who}</span>` : '') + `</div>`;
+    }).join('')}</div>` : '');
 
   const eq = $('ucEquip');
   if (isHero(u)) {
