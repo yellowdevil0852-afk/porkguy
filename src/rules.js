@@ -164,6 +164,10 @@ function dmgCalc(a, d, opt) {
   if (opt.crit) v *= CRIT_MULT;
   v = Math.round(v);
   if (pasOf(d, 'rangedRes') && dmgType(a) !== 'melee') v = Math.round(v * (1 - pasOf(d, 'rangedRes')));
+  // 反擊架式（rip）之前一直是死碼：這裡靠 opt.counter 才會生效，但唯一會
+  // 呼叫 dmgCalc() 的 strike()/hit() 都沒把 opt.counter 轉傳下來，導致
+  // 陣地盾牆（kn_vow）「反擊傷害 +30%」這個效果從來沒有真的加乘過。
+  // 已經在 strike() 跟兩處真正觸發反擊的呼叫點把 counter:true 補上。
   const rip = (opt.counter ? pasOf(a, 'counterPct') : 0) + (opt.counter ? stVal(a, 'rip') : 0);
   if (rip) v = Math.round(v * (1 + rip));
   // 絕對防禦：走完減傷曲線之後，再直接砍一個百分比（跟堅甲的加防禦不同層）
@@ -608,7 +612,7 @@ async function strike(a, d, opt) {
   const crit = !opt.noCrit && grng() < critOf(a);
   const fm = flankMult(a, d);
   const charged = !!a.charged;       // 競技場的蓄力地塊：下一次普通攻擊打完就消耗掉
-  const dmg = dmgCalc(a, d, { crit, mult: (opt.mult || 1) * (charged ? 1.3 : 1), noFlank: opt.noFlank });
+  const dmg = dmgCalc(a, d, { crit, mult: (opt.mult || 1) * (charged ? 1.3 : 1), noFlank: opt.noFlank, counter: opt.counter });
   if (charged) {
     a.charged = false;
     addSt(a, a, { id: 'weaken', pct: 0.3, turns: 2 }, '蓄力');
@@ -760,7 +764,7 @@ async function runAction(a) {
     const d = byId(a.tid);
     const lock = tauntTid(u);
     if (!canAtkU(u)) { toast(nameOf(u) + ' 被繳械，不能普攻'); busy = false; if (myTurn()) select(u); return; }
-    if (lock && d && d.id !== lock) { toast('被嘲諷，這回合只能攻擊嘲諷來源'); busy = false; if (myTurn()) select(u); return; }
+    if (lock !== null && d && d.id !== lock) { toast('被嘲諷，這回合只能攻擊嘲諷來源'); busy = false; if (myTurn()) select(u); return; }
     if (d && d.alive) {
       await strike(u, d);
       u.hitOnce = 1;                      // 獵人本能只吃本回合第一次出手
@@ -769,7 +773,7 @@ async function runAction(a) {
         gainExp(u, XP_HIT);
         if (canCounter(u, d)) {
           await wait(90);
-          await strike(d, u, { noCrit: false });
+          await strike(d, u, { noCrit: false, counter: true });
           if (u.hp <= 0) await die(u, d); else gainExp(d, XP_CNT);
         }
       }
@@ -1554,7 +1558,7 @@ async function monsterPhase() {
     let tgt = null, bd = 1e9;
     for (const u of alive()) {
       if (u.side === 2) continue;
-      if (lock && u.id !== lock) continue;
+      if (lock !== null && u.id !== lock) continue;
       if (smokeBlocks(m, u)) continue;   // 遠程怪也一樣鎖不到煙霧裡的目標
       const d = dist(u, m);
       if (d < bd || (d === bd && tgt && u.id < tgt.id)) { bd = d; tgt = u; }
@@ -1606,7 +1610,7 @@ async function mAttack(m, tgt) {
   if (tgt.hp <= 0) { await die(tgt, m); return; }
   if (canCounter(m, tgt)) {
     await wait(80);
-    await strike(tgt, m);
+    await strike(tgt, m, { counter: true });
     if (m.hp <= 0) await die(m, tgt); else gainExp(tgt, XP_CNT);
   }
 }

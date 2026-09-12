@@ -6499,6 +6499,54 @@ function buildUnitView(u) {
   play(u, A.idle);
 }
 
+// 狀態視覺效果：控制類狀態在腳下疊一圈顏色不同的光環（同時中好幾種就
+// 一層一層往上疊，不會互相蓋掉），冰凍/恐懼額外把整個模型染色——
+// 光靠選取後才看得到的側邊詳細面板，玩家很難一眼看出「這個單位現在
+// 到底中了什麼、還能不能動」，尤其戰場上一堆單位同時在動的時候。
+const ST_FX_COL = {
+  freeze: 0x8fe0ff, stun: 0xffd84a, root: 0x8a6a3a,
+  silence: 0xcf7dff, fear: 0x6a3fa0, taunt: 0xff5c47, disarm: 0x9aa0ad
+};
+const ST_TINT = { freeze: 0xa8d8ff, fear: 0x9080b8 };
+function updStatusFX(u) {
+  if (!u.view) return;
+  const g = u.view.g;
+  if (!g.userData.stFx) g.userData.stFx = {};
+  const rings = g.userData.stFx;
+  const active = {};
+  for (const b of u.st) if (ST_FX_COL[b.id]) active[b.id] = true;
+  for (const id in rings) {
+    if (active[id]) continue;
+    g.remove(rings[id]);
+    rings[id].geometry.dispose(); rings[id].material.dispose();
+    delete rings[id];
+  }
+  let stack = 0;
+  for (const id in ST_FX_COL) {
+    if (!active[id]) continue;
+    if (!rings[id]) {
+      const m = new THREE.Mesh(
+        new THREE.RingGeometry(TILE * 0.42, TILE * 0.52, 22),
+        new THREE.MeshBasicMaterial({ color: ST_FX_COL[id], transparent: true, opacity: 0.85,
+          side: THREE.DoubleSide, depthWrite: false })
+      );
+      m.rotation.x = -Math.PI / 2;
+      g.add(m);
+      rings[id] = m;
+    }
+    rings[id].position.y = 0.05 + stack * 0.07;
+    stack++;
+  }
+  // 冰凍/恐懼：整個模型染色；狀態解除要換回原本裝備/隊伍色，
+  // c.userData.base 是 buildUnitView() 裡就存好的「乾淨」原色
+  const tintId = Object.keys(ST_TINT).find(id => active[id]);
+  u.view.root.traverse(c => {
+    if ((!c.isMesh && !c.isSkinnedMesh) || !c.userData.base) return;
+    c.material.color.copy(c.userData.base);
+    if (tintId) c.material.color.multiply(new THREE.Color(ST_TINT[tintId]));
+  });
+}
+
 function attachWeapon(root, name, slot) {
   // GLTFLoader 會把節點名稱裡的 . : / [ ] 去掉，所以 handslot.r 進來之後叫 handslotr
   const s = root.getObjectByName(slot) || root.getObjectByName(slot.replace(/[.:/[\]\s]/g, ''));
@@ -6802,6 +6850,12 @@ function addSt(u, src, e, label) {
     v = -Math.round(Math.max(1, e.id === 'weaken' ? atkOf(u) : defOf(u)) * e.pct);
   if (e.id === 'slow') v = -(e.val || 1);                     // 減速：直接扣移動格數
   if (e.id === 'curse') v = e.pct;
+  // 銳利（暴擊率）：critOf() 是直接把 stVal 除以 100 當機率點數用，
+  // 不能沿用上面「pct 是施術者攻擊力的百分比」那條通用公式——鷹眼專注
+  // 寫的是「銳利 +20%」，套用通用公式會變成「攻擊力的 20% 當成暴擊點數」，
+  // 攻擊力越高吃到的暴擊率越誇張（等級一高，一個技能能到 +30%~+50%
+  // 暴擊率），跟攻擊力完全不該掛勾。改成直接把 pct 換算成暴擊點數。
+  if (e.id === 'crit') v = Math.round(e.pct * 100);
   // 之前這裡有一個「+1」把每個狀態的實際存活時間都多墊一輪，本來是想
   // 讓「回合中途上的狀態」也能撐過對方下一回合，但 tickStatus() 永遠是
   // 那個單位「自己回合開始」才會跑，不管什麼時候中的，最早也是下一次
@@ -6841,7 +6895,13 @@ const canMoveU = u => !hasSt(u, 'stun') && !hasSt(u, 'root') && !hasSt(u, 'freez
 const canActU = u => !hasSt(u, 'stun') && !hasSt(u, 'freeze') && !hasSt(u, 'fear');
 const canSkillU = u => canActU(u) && !hasSt(u, 'silence');
 const canAtkU = u => canActU(u) && !hasSt(u, 'disarm');            // 繳械只擋普攻，技能照放
-// 嘲諷：回傳這個單位普攻時被強制鎖定的目標 id（沒有就 null）
+// 嘲諷：回傳這個單位普攻時被強制鎖定的目標 id（沒有就 null）。
+// 呼叫端一定要用 `lock !== null`，不能寫 `if (lock && ...)`——單位 id
+// 從 0 開始編號，嘲諷來源剛好是那一局第一個建立的英雄（id===0）時，
+// 0 是假值，`if (lock && ...)` 會把「id 0 的嘲諷」誤判成「沒有嘲諷」，
+// 嘲諷等於沒生效。四個呼叫點（ui.js/rules.js×2/ai.js）原本都是這種
+// 真假值判斷，這正是使用者說「不確定嘲諷有沒有用」的真正原因——已經
+// 全部改成 `!== null` 明確判斷。
 function tauntTid(u) {
   const t = u.st.find(x => x.id === 'taunt');
   if (!t) return null;
@@ -7127,6 +7187,10 @@ function dmgCalc(a, d, opt) {
   if (opt.crit) v *= CRIT_MULT;
   v = Math.round(v);
   if (pasOf(d, 'rangedRes') && dmgType(a) !== 'melee') v = Math.round(v * (1 - pasOf(d, 'rangedRes')));
+  // 反擊架式（rip）之前一直是死碼：這裡靠 opt.counter 才會生效，但唯一會
+  // 呼叫 dmgCalc() 的 strike()/hit() 都沒把 opt.counter 轉傳下來，導致
+  // 陣地盾牆（kn_vow）「反擊傷害 +30%」這個效果從來沒有真的加乘過。
+  // 已經在 strike() 跟兩處真正觸發反擊的呼叫點把 counter:true 補上。
   const rip = (opt.counter ? pasOf(a, 'counterPct') : 0) + (opt.counter ? stVal(a, 'rip') : 0);
   if (rip) v = Math.round(v * (1 + rip));
   // 絕對防禦：走完減傷曲線之後，再直接砍一個百分比（跟堅甲的加防禦不同層）
@@ -7571,7 +7635,7 @@ async function strike(a, d, opt) {
   const crit = !opt.noCrit && grng() < critOf(a);
   const fm = flankMult(a, d);
   const charged = !!a.charged;       // 競技場的蓄力地塊：下一次普通攻擊打完就消耗掉
-  const dmg = dmgCalc(a, d, { crit, mult: (opt.mult || 1) * (charged ? 1.3 : 1), noFlank: opt.noFlank });
+  const dmg = dmgCalc(a, d, { crit, mult: (opt.mult || 1) * (charged ? 1.3 : 1), noFlank: opt.noFlank, counter: opt.counter });
   if (charged) {
     a.charged = false;
     addSt(a, a, { id: 'weaken', pct: 0.3, turns: 2 }, '蓄力');
@@ -7723,7 +7787,7 @@ async function runAction(a) {
     const d = byId(a.tid);
     const lock = tauntTid(u);
     if (!canAtkU(u)) { toast(nameOf(u) + ' 被繳械，不能普攻'); busy = false; if (myTurn()) select(u); return; }
-    if (lock && d && d.id !== lock) { toast('被嘲諷，這回合只能攻擊嘲諷來源'); busy = false; if (myTurn()) select(u); return; }
+    if (lock !== null && d && d.id !== lock) { toast('被嘲諷，這回合只能攻擊嘲諷來源'); busy = false; if (myTurn()) select(u); return; }
     if (d && d.alive) {
       await strike(u, d);
       u.hitOnce = 1;                      // 獵人本能只吃本回合第一次出手
@@ -7732,7 +7796,7 @@ async function runAction(a) {
         gainExp(u, XP_HIT);
         if (canCounter(u, d)) {
           await wait(90);
-          await strike(d, u, { noCrit: false });
+          await strike(d, u, { noCrit: false, counter: true });
           if (u.hp <= 0) await die(u, d); else gainExp(d, XP_CNT);
         }
       }
@@ -8517,7 +8581,7 @@ async function monsterPhase() {
     let tgt = null, bd = 1e9;
     for (const u of alive()) {
       if (u.side === 2) continue;
-      if (lock && u.id !== lock) continue;
+      if (lock !== null && u.id !== lock) continue;
       if (smokeBlocks(m, u)) continue;   // 遠程怪也一樣鎖不到煙霧裡的目標
       const d = dist(u, m);
       if (d < bd || (d === bd && tgt && u.id < tgt.id)) { bd = d; tgt = u; }
@@ -8569,7 +8633,7 @@ async function mAttack(m, tgt) {
   if (tgt.hp <= 0) { await die(tgt, m); return; }
   if (canCounter(m, tgt)) {
     await wait(80);
-    await strike(tgt, m);
+    await strike(tgt, m, { counter: true });
     if (m.hp <= 0) await die(m, tgt); else gainExp(tgt, XP_CNT);
   }
 }
@@ -8788,10 +8852,13 @@ async function enterArena() {
   camTarget.set(wx(7), 0, wz(8));    // 不然它跑完會把鏡頭拉回舊地圖的座標，畫面對不上新的小競技場
   updCam();
   refreshTop(); refreshRoster(); drawMinimap();
-  arenaStartTurn(0);
+  await arenaStartTurn(0);
 }
 
-function arenaStartTurn(side) {
+// 跟主賽事的 startTurn() 是完全獨立的兩條回合流程——之前只抄了「重置
+// moved/acted」那段，漏掉 tickStatus()，導致競技場裡中的定身/冰凍/中毒
+// 之類全部只加不減，使用者回報「定身 1 回合卻一直定身」就是這裡。
+async function arenaStartTurn(side) {
   G.cur = side;
   for (const u of arenaUnits(side)) {
     if (!u.alive) continue;
@@ -8800,6 +8867,7 @@ function arenaStartTurn(side) {
     if (!canMoveU(u)) u.moved = true;
     if (!canActU(u)) u.acted = true;
   }
+  for (const u of arenaUnits(side).slice()) await tickStatus(u);
   dimDone(); refreshTop(); refreshRoster();
   turnBanner();
   if (aiOn && mode === 'local' && side === AI_SIDE) setTimeout(aiTurn, 500);
@@ -8808,7 +8876,7 @@ function arenaStartTurn(side) {
 // 只有 doEndTurn() 判斷 G.arena 存在時才會走到這裡——競技場裡沒有魔物階段，
 // 純粹雙方輪流，直到一輪打到只剩一邊站著（在 arenaDie() 裡反應式判定）
 async function arenaEndTurn() {
-  arenaStartTurn(G.cur === 0 ? 1 : 0);
+  await arenaStartTurn(G.cur === 0 ? 1 : 0);
 }
 
 // 這裡跟主賽事的 die() 分開走：不掉經驗、不進倒下復活、不觸發殲滅判定，
@@ -9409,6 +9477,7 @@ function updTag(u) {
   const sh = shieldOf(u);
   u.tag.querySelector('b').style.width = Math.min(100, sh / mhpOf(u) * 100) + '%';
   u.tag.classList.toggle('done', u.side === G.cur && u.moved && u.acted);
+  updStatusFX(u);
 }
 const projV = new THREE.Vector3();
 function projectTags() {
@@ -10797,7 +10866,8 @@ function onClick(ev) {
   if (u && !sel.acted) {
     const friendly = u.side === sel.side;
     if (!friendly && !canAtkU(sel)) { toast(nameOf(sel) + ' 被繳械，不能普攻'); return; }
-    if (!friendly && tauntTid(sel) && u.id !== tauntTid(sel)) { toast('被嘲諷，這回合只能攻擊嘲諷來源'); return; }
+    const tlock = tauntTid(sel);
+    if (!friendly && tlock !== null && u.id !== tlock) { toast('被嘲諷，這回合只能攻擊嘲諷來源'); return; }
     if (!friendly && smokeBlocks(sel, u)) { toast('目標被煙霧擋住，遠程鎖定不到'); return; }
     const ok = friendly ? (base(sel).healPct && u.hp < mhpOf(u)) : true;
     if (ok) {
@@ -11062,7 +11132,7 @@ function aiPlan(u) {
         if (dmg < 3 && !kill) continue;
         // 繳械不能普攻、嘲諷只能打嘲諷來源時，跳過普攻但技能補刀照舊
         const lock = tauntTid(u);
-        const canBasic = canAtkU(u) && !(lock && t.id !== lock);
+        const canBasic = canAtkU(u) && !(lock !== null && t.id !== lock);
         if (canBasic) {
           const cnt = (!kill && canCounter(u, t)) ? dmgCalc(t, u, {}) : 0;
           let sc = Math.min(dmg, t.hp) * 10 + (kill ? 70 : 0) - risk - step * 0.3;

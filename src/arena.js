@@ -136,10 +136,13 @@ async function enterArena() {
   camTarget.set(wx(7), 0, wz(8));    // 不然它跑完會把鏡頭拉回舊地圖的座標，畫面對不上新的小競技場
   updCam();
   refreshTop(); refreshRoster(); drawMinimap();
-  arenaStartTurn(0);
+  await arenaStartTurn(0);
 }
 
-function arenaStartTurn(side) {
+// 跟主賽事的 startTurn() 是完全獨立的兩條回合流程——之前只抄了「重置
+// moved/acted」那段，漏掉 tickStatus()，導致競技場裡中的定身/冰凍/中毒
+// 之類全部只加不減，使用者回報「定身 1 回合卻一直定身」就是這裡。
+async function arenaStartTurn(side) {
   G.cur = side;
   for (const u of arenaUnits(side)) {
     if (!u.alive) continue;
@@ -148,6 +151,7 @@ function arenaStartTurn(side) {
     if (!canMoveU(u)) u.moved = true;
     if (!canActU(u)) u.acted = true;
   }
+  for (const u of arenaUnits(side).slice()) await tickStatus(u);
   dimDone(); refreshTop(); refreshRoster();
   turnBanner();
   if (aiOn && mode === 'local' && side === AI_SIDE) setTimeout(aiTurn, 500);
@@ -156,7 +160,7 @@ function arenaStartTurn(side) {
 // 只有 doEndTurn() 判斷 G.arena 存在時才會走到這裡——競技場裡沒有魔物階段，
 // 純粹雙方輪流，直到一輪打到只剩一邊站著（在 arenaDie() 裡反應式判定）
 async function arenaEndTurn() {
-  arenaStartTurn(G.cur === 0 ? 1 : 0);
+  await arenaStartTurn(G.cur === 0 ? 1 : 0);
 }
 
 // 這裡跟主賽事的 die() 分開走：不掉經驗、不進倒下復活、不觸發殲滅判定，

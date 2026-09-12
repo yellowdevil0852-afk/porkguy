@@ -22,6 +22,12 @@ function addSt(u, src, e, label) {
     v = -Math.round(Math.max(1, e.id === 'weaken' ? atkOf(u) : defOf(u)) * e.pct);
   if (e.id === 'slow') v = -(e.val || 1);                     // 減速：直接扣移動格數
   if (e.id === 'curse') v = e.pct;
+  // 銳利（暴擊率）：critOf() 是直接把 stVal 除以 100 當機率點數用，
+  // 不能沿用上面「pct 是施術者攻擊力的百分比」那條通用公式——鷹眼專注
+  // 寫的是「銳利 +20%」，套用通用公式會變成「攻擊力的 20% 當成暴擊點數」，
+  // 攻擊力越高吃到的暴擊率越誇張（等級一高，一個技能能到 +30%~+50%
+  // 暴擊率），跟攻擊力完全不該掛勾。改成直接把 pct 換算成暴擊點數。
+  if (e.id === 'crit') v = Math.round(e.pct * 100);
   // 之前這裡有一個「+1」把每個狀態的實際存活時間都多墊一輪，本來是想
   // 讓「回合中途上的狀態」也能撐過對方下一回合，但 tickStatus() 永遠是
   // 那個單位「自己回合開始」才會跑，不管什麼時候中的，最早也是下一次
@@ -61,7 +67,13 @@ const canMoveU = u => !hasSt(u, 'stun') && !hasSt(u, 'root') && !hasSt(u, 'freez
 const canActU = u => !hasSt(u, 'stun') && !hasSt(u, 'freeze') && !hasSt(u, 'fear');
 const canSkillU = u => canActU(u) && !hasSt(u, 'silence');
 const canAtkU = u => canActU(u) && !hasSt(u, 'disarm');            // 繳械只擋普攻，技能照放
-// 嘲諷：回傳這個單位普攻時被強制鎖定的目標 id（沒有就 null）
+// 嘲諷：回傳這個單位普攻時被強制鎖定的目標 id（沒有就 null）。
+// 呼叫端一定要用 `lock !== null`，不能寫 `if (lock && ...)`——單位 id
+// 從 0 開始編號，嘲諷來源剛好是那一局第一個建立的英雄（id===0）時，
+// 0 是假值，`if (lock && ...)` 會把「id 0 的嘲諷」誤判成「沒有嘲諷」，
+// 嘲諷等於沒生效。四個呼叫點（ui.js/rules.js×2/ai.js）原本都是這種
+// 真假值判斷，這正是使用者說「不確定嘲諷有沒有用」的真正原因——已經
+// 全部改成 `!== null` 明確判斷。
 function tauntTid(u) {
   const t = u.st.find(x => x.id === 'taunt');
   if (!t) return null;

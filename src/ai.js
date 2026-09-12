@@ -135,7 +135,7 @@ function aiPlan(u) {
         if (dmg < 3 && !kill) continue;
         // 繳械不能普攻、嘲諷只能打嘲諷來源時，跳過普攻但技能補刀照舊
         const lock = tauntTid(u);
-        const canBasic = canAtkU(u) && !(lock && t.id !== lock);
+        const canBasic = canAtkU(u) && !(lock !== null && t.id !== lock);
         if (canBasic) {
           const cnt = (!kill && canCounter(u, t)) ? dmgCalc(t, u, {}) : 0;
           let sc = Math.min(dmg, t.hp) * 10 + (kill ? 70 : 0) - risk - step * 0.3;

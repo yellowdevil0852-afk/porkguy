@@ -28,6 +28,7 @@ function updTag(u) {
   const sh = shieldOf(u);
   u.tag.querySelector('b').style.width = Math.min(100, sh / mhpOf(u) * 100) + '%';
   u.tag.classList.toggle('done', u.side === G.cur && u.moved && u.acted);
+  updStatusFX(u);
 }
 const projV = new THREE.Vector3();
 function projectTags() {
@@ -1416,7 +1417,8 @@ function onClick(ev) {
   if (u && !sel.acted) {
     const friendly = u.side === sel.side;
     if (!friendly && !canAtkU(sel)) { toast(nameOf(sel) + ' 被繳械，不能普攻'); return; }
-    if (!friendly && tauntTid(sel) && u.id !== tauntTid(sel)) { toast('被嘲諷，這回合只能攻擊嘲諷來源'); return; }
+    const tlock = tauntTid(sel);
+    if (!friendly && tlock !== null && u.id !== tlock) { toast('被嘲諷，這回合只能攻擊嘲諷來源'); return; }
     if (!friendly && smokeBlocks(sel, u)) { toast('目標被煙霧擋住，遠程鎖定不到'); return; }
     const ok = friendly ? (base(sel).healPct && u.hp < mhpOf(u)) : true;
     if (ok) {

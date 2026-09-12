@@ -731,6 +731,54 @@ function buildUnitView(u) {
   play(u, A.idle);
 }
 
+// 狀態視覺效果：控制類狀態在腳下疊一圈顏色不同的光環（同時中好幾種就
+// 一層一層往上疊，不會互相蓋掉），冰凍/恐懼額外把整個模型染色——
+// 光靠選取後才看得到的側邊詳細面板，玩家很難一眼看出「這個單位現在
+// 到底中了什麼、還能不能動」，尤其戰場上一堆單位同時在動的時候。
+const ST_FX_COL = {
+  freeze: 0x8fe0ff, stun: 0xffd84a, root: 0x8a6a3a,
+  silence: 0xcf7dff, fear: 0x6a3fa0, taunt: 0xff5c47, disarm: 0x9aa0ad
+};
+const ST_TINT = { freeze: 0xa8d8ff, fear: 0x9080b8 };
+function updStatusFX(u) {
+  if (!u.view) return;
+  const g = u.view.g;
+  if (!g.userData.stFx) g.userData.stFx = {};
+  const rings = g.userData.stFx;
+  const active = {};
+  for (const b of u.st) if (ST_FX_COL[b.id]) active[b.id] = true;
+  for (const id in rings) {
+    if (active[id]) continue;
+    g.remove(rings[id]);
+    rings[id].geometry.dispose(); rings[id].material.dispose();
+    delete rings[id];
+  }
+  let stack = 0;
+  for (const id in ST_FX_COL) {
+    if (!active[id]) continue;
+    if (!rings[id]) {
+      const m = new THREE.Mesh(
+        new THREE.RingGeometry(TILE * 0.42, TILE * 0.52, 22),
+        new THREE.MeshBasicMaterial({ color: ST_FX_COL[id], transparent: true, opacity: 0.85,
+          side: THREE.DoubleSide, depthWrite: false })
+      );
+      m.rotation.x = -Math.PI / 2;
+      g.add(m);
+      rings[id] = m;
+    }
+    rings[id].position.y = 0.05 + stack * 0.07;
+    stack++;
+  }
+  // 冰凍/恐懼：整個模型染色；狀態解除要換回原本裝備/隊伍色，
+  // c.userData.base 是 buildUnitView() 裡就存好的「乾淨」原色
+  const tintId = Object.keys(ST_TINT).find(id => active[id]);
+  u.view.root.traverse(c => {
+    if ((!c.isMesh && !c.isSkinnedMesh) || !c.userData.base) return;
+    c.material.color.copy(c.userData.base);
+    if (tintId) c.material.color.multiply(new THREE.Color(ST_TINT[tintId]));
+  });
+}
+
 function attachWeapon(root, name, slot) {
   // GLTFLoader 會把節點名稱裡的 . : / [ ] 去掉，所以 handslot.r 進來之後叫 handslotr
   const s = root.getObjectByName(slot) || root.getObjectByName(slot.replace(/[.:/[\]\s]/g, ''));
