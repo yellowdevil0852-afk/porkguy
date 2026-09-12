@@ -94,11 +94,13 @@ function drawRespawnTags() {
 
 // 施放技能時，滑鼠指到的目標上會出現一個準心：傷害技能紅色、增益技能綠色
 // 技能怎麼選目標：自己身上／敵方單位／友方單位／空地或格子
-const K_SELF = ['fan', 'cross', 'around', 'retreat', 'refreshSelf', 'aura', 'buffSelf', 'buffAround', 'domain', 'raise'];
+// frontbox（面向矩形 AOE，例如咆哮獅吼）不吃 tx/ty，範圍完全由施放當下的
+// 朝向（u.dir）決定，跟其他不用瞄準的「自身」類技能同一套流程，歸進 K_SELF
+const K_SELF = ['fan', 'cross', 'around', 'retreat', 'refreshSelf', 'aura', 'buffSelf', 'buffAround', 'domain', 'raise', 'frontbox'];
 const K_ENEMY = ['single', 'multi', 'rand'];
 const K_ALLY = ['heal', 'shield', 'buffAlly', 'refreshAlly'];
 const K_EMPTY = ['teleport', 'trap', 'trapN'];
-const HARM = ['single', 'multi', 'fan', 'cross', 'around', 'line', 'aoe', 'pick', 'wave', 'charge', 'delayed', 'trap', 'trapN', 'rand', 'field'];
+const HARM = ['single', 'multi', 'fan', 'cross', 'around', 'line', 'aoe', 'pick', 'wave', 'charge', 'delayed', 'trap', 'trapN', 'rand', 'field', 'frontbox'];
 const skAoeR = s => (s.k === 'around' || s.k === 'fan' || s.k === 'cross' ? 1 : s.r || 0);
 function drawReticle() {
   const el = $('reticle');
@@ -212,6 +214,23 @@ function drawRanges() {
 function drawSkillRange() {
   const s = SK[skillMode];
   const harm = HARM.includes(s.k);
+  // 面向矩形（咆哮獅吼之類）：範圍是朝向前方的一整塊 3×depth 矩形，
+  // 跟其他「以自己為中心、正方形展開」的 K_SELF 技能形狀完全不同，
+  // 要照實際命中判定（runAction() 的 'frontbox' 分支）同一套算法畫，
+  // 不能套用下面通用的「上下左右對稱展開」邏輯（那樣只會亮出朝上下左右
+  // 各一格，不是真正會受影響的整塊矩形）。
+  if (s.k === 'frontbox') {
+    addOverlay(sel.x, sel.y, 'skill', 0.75);
+    const rf = FACE[sel.dir];
+    const fx = Math.round(rf[0]), fy = Math.round(rf[1]);
+    const px = fy, py = -fx;
+    for (let dp = 1; dp <= (s.depth || 2); dp++)
+      for (let w = -1; w <= 1; w++) {
+        const x = sel.x + fx * dp + px * w, y = sel.y + fy * dp + py * w;
+        if (inBoard(x, y)) addOverlay(x, y, 'target', 0.5);
+      }
+    return;
+  }
   // 以自己為中心的技能，直接把影響範圍畫出來就好
   if (K_SELF.includes(s.k)) {
     addOverlay(sel.x, sel.y, 'skill', 0.75);

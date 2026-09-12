@@ -10,6 +10,16 @@ let sel = null, reach = null, phase = 'idle', busy = false;
 let preMove = null, skillMode = null;
 let mode = 'local', myTeam = 0;
 let uidSeq = 0, itemSeq = 0, wakeSeq = 0;
+// 每次 startTurn() 真的開始一個新回合就 +1——競技場最後一擊可能在
+// runAction() 打到一半的時候，透過 die()→arenaDie()→exitArena() 整個
+// 巢狀呼叫鏈同步跑完一整輪新回合（包含重建主地圖、重置雙方 moved/acted），
+// 等這串 await 都跑完、控制權回到最外層 runAction() 的時候，回合其實
+// 已經換過一輪了，但 runAction() 完全不知道，還是照樣把「這個單位」的
+// acted 設成 true——如果這個單位剛好是新回合馬上要輪到的那個（競技場
+// 結束固定接藍方回合），等於把剛重置好的 false 又蓋回 true，變成「這
+// 回合可以移動、卻不能攻擊」。用跟 camJob 一樣的世代計數器擋掉這種
+// 「世界已經換了一輪，手上這份 await 結果已經過期」的情況。
+let turnGen = 0;
 let grng = mulberry32(1);   // 所有「遊戲邏輯」的亂數，兩邊同步
 
 const byId = i => G.units.find(u => u.id === i);
@@ -341,16 +351,53 @@ function reviveMonsters() {
 
 /* ── 裝備 ── */
 
+// 浮動點數分配：先定總點數預算（GEAR_BUDGET），再隨機分配到各屬性，
+// 同品質同部位的裝備會長得不一樣。武器/防具都有一個「保底」屬性
+// （武器保底攻擊力、防具保底生命）吃掉一部分點數，剩下的點數逐點
+// 擲骰分配；飾品完全隨機、沒有保底也沒有「浪費」這個結果。
+// 移動/射程只有史詩/傳說才解鎖（不管哪個部位），换算成整數不強制最少 1
+// （分配到點但四捨五入變 0 是真實存在的撲空結果，不像攻防生命那樣保底）。
 function rollItem(q) {
   const r = q === undefined ? 0 : q;
   const slots = ['weapon', 'armor', 'trinket'];
   const slot = slots[Math.floor(grng() * 3)];
   const g = GEAR[slot][Math.floor(grng() * GEAR[slot].length)];
   const it = { iid: ++itemSeq, slot, r, n: g.n };
-  for (const k of ['atk', 'def', 'hp', 'mov', 'rng']) {
-    if (!g[k]) continue;
-    it[k] = g[k] > 0 ? Math.max(1, Math.round(g[k] * RARITY[r].mult)) : g[k];
+  const P = GEAR_BUDGET[slot][r];
+  const movOn = r >= 3;   // 史詩(3)／傳說(4) 才解鎖移動/射程
+  const pool = { atk: 0, def: 0, hp: 0, mov: 0, rng: 0 };
+
+  if (slot === 'trinket') {
+    const cats = movOn ? ['atk', 'def', 'hp', 'mov', 'rng'] : ['atk', 'def', 'hp'];
+    for (let i = 0; i < P; i++) pool[cats[Math.floor(grng() * cats.length)]]++;
+  } else {
+    const primary = slot === 'weapon' ? 'atk' : 'hp';
+    const secondary = slot === 'weapon' ? 'hp' : 'def';
+    const floor = Math.ceil(P * (slot === 'weapon' ? 0.4 : 0.6));
+    pool[primary] += floor;
+    for (let i = 0; i < P - floor; i++) {
+      const roll = grng();
+      if (movOn) {
+        if (roll < 0.4) pool[primary]++;
+        else if (roll < 0.8) pool[secondary]++;
+        else if (roll < 0.9) pool.mov++;
+        // 其餘 10%：浪費掉，不補到別的屬性
+      } else {
+        if (roll < 0.45) pool[primary]++;
+        else if (roll < 0.9) pool[secondary]++;
+        // 其餘 10%：浪費掉
+      }
+    }
   }
+
+  if (pool.atk) it.atk = pool.atk * PT_GAIN.atk;
+  if (pool.def) it.def = pool.def * PT_GAIN.def;
+  if (pool.hp) it.hp = pool.hp * PT_GAIN.hp;
+  const mov = Math.min(2, Math.round(pool.mov / 4));
+  const rng = Math.min(1, Math.round(pool.rng / 5));
+  if (mov) it.mov = mov;
+  if (rng) it.rng = rng;
+
   if (r > 0 && grng() < 0.15 + r * 0.22) {
     // 飾品不受部位限制、能抽到全部詞綴；武器/防具只能抽各自限定 + 任何部位通用的，
     // 而且這個品質要真的有數值（val[r] 不是 null）才進候選池
@@ -689,6 +736,7 @@ async function die(u, killer) {
 // a = {uid, path?, kind, tid?, tx?, ty?, skill?}
 async function runAction(a) {
   busy = true;
+  const myGen = turnGen;   // 見 turnGen 宣告處的說明：偵測「世界已經換了一輪」
   clearOverlay(); hideForecast(); closeSkillBar();
   const u = byId(a.uid);
   if (!u || !u.alive) { busy = false; return; }
@@ -726,6 +774,10 @@ async function runAction(a) {
         }
       }
     }
+    // 這次攻擊如果剛好是競技場最後一擊，die()→arenaDie()→exitArena() 會
+    // 整條同步跑完一整輪新回合（見 turnGen），u 的 moved/acted 可能已經被
+    // 新回合重置過，這裡不能再蓋回 true，不然會變成「這回合能動不能打」。
+    if (myGen !== turnGen) { busy = false; return; }
     u.acted = true;
   } else if (a.kind === 'heal') {
     const t = byId(a.tid);
@@ -748,6 +800,8 @@ async function runAction(a) {
     u.acted = true;
   } else if (a.kind === 'skill') {
     await useSkill(u, a.skill, a);
+    // 同上：技能命中如果剛好是競技場最後一擊，回合可能已經被換過一輪了
+    if (myGen !== turnGen) { busy = false; return; }
     // 一騎當千這類「本回合殺人就恢復行動」的技能，本來就是要接著攻擊用的——
     // 放技能本身不能算用掉這回合的行動，不然「這回合殺人才有用」永遠碰不到
     if (!SK[a.skill].killRefresh) u.acted = true;
@@ -1375,6 +1429,7 @@ function tickAuras(side) {
 /* ── 回合 ── */
 
 async function startTurn(side) {
+  turnGen++;
   G.cur = side; G.lastSide = side;
   // 王座計數
   const holder = alive().find(u => u.x === THRONE[0] && u.y === THRONE[1] && u.side === side);

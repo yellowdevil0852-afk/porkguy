@@ -184,23 +184,32 @@ const AFFIX = [
   { id: 'guard', n: '守護', slot: 'armor',  d: '受到的傷害減少 ',      val: [null, 2, 4, 6, 10] },
   { id: 'swift', n: '疾風', slot: 'any',    d: '移動力 +',            val: [null, null, null, 1, 2] }
 ];
+// 裝備浮動點數分配：「型」只決定名字/外觀/職業限制，實際數值改由
+// rollItem()（src/rules.js）依 GEAR_BUDGET 的點數預算隨機分配決定，
+// 型底下不再放固定的 atk/def/hp/mov/rng 數值。
 const GEAR = {
   weapon: [
-    { n: '短劍', atk: 3, use: ['KN', 'RG', 'MG', 'CL', 'BB'] },
-    { n: '闊劍', atk: 5, use: ['KN', 'BB'] },
-    { n: '戰斧', atk: 6, def: -1, use: ['BB', 'KN'] },
-    { n: '長弓', atk: 4, rng: 1, use: ['RG'] },
-    { n: '法杖', atk: 5, use: ['MG', 'CL'] },
-    { n: '權杖', atk: 3, hp: 6, use: ['CL', 'MG'] }
+    { n: '短劍', use: ['KN', 'RG', 'MG', 'CL', 'BB'] },
+    { n: '闊劍', use: ['KN', 'BB'] },
+    { n: '戰斧', use: ['BB', 'KN'] },
+    { n: '長弓', use: ['RG'] },
+    { n: '法杖', use: ['MG', 'CL'] },
+    { n: '權杖', use: ['CL', 'MG'] }
   ],
   armor: [
-    { n: '皮甲', def: 3 }, { n: '鎖子甲', def: 5 }, { n: '板甲', def: 7, mov: -1 },
-    { n: '法袍', def: 2, hp: 8 }, { n: '鬥篷', def: 3, mov: 1 }
+    { n: '皮甲' }, { n: '鎖子甲' }, { n: '板甲' }, { n: '法袍' }, { n: '鬥篷' }
   ],
   trinket: [
-    { n: '力量護符', atk: 3 }, { n: '守護石', def: 3 }, { n: '生命寶珠', hp: 12 },
-    { n: '疾行靴', mov: 2 }, { n: '鷹眼徽章', rng: 1 }, { n: '戰旗', atk: 2, def: 2 }
+    { n: '力量護符' }, { n: '守護石' }, { n: '生命寶珠' },
+    { n: '疾行靴' }, { n: '鷹眼徽章' }, { n: '戰旗' }
   ]
+};
+// 品質 0~4（普通～傳說）對應的浮動點數預算，武器/防具共用同一條曲線，
+// 飾品彈性最大所以預算故意抓低一點。
+const GEAR_BUDGET = {
+  weapon:  [4, 6, 8, 11, 13],
+  armor:   [4, 6, 8, 11, 13],
+  trinket: [3, 5, 7, 9, 11]
 };
 const SLOT_N = { weapon: '武器', armor: '防具', trinket: '飾品' };
 
