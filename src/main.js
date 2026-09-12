@@ -341,6 +341,11 @@ async function boot() {
     if (!canAct() || !sel || !preMove || preMove.uid !== sel.id || sel.acted) return;
     send({ kind: 'undo', uid: sel.id, x: preMove.x, y: preMove.y });
   };
+  $('btnTele').onclick = () => {
+    if (!canAct() || !sel || !canTeleTeammate(sel)) return;
+    teleMode = true;
+    toast('選一個隊友，傳送到他旁邊');
+  };
   $('rAgain').onclick = () => {
     const seed = (Math.random() * 1e9) | 0;
     if (mode === 'online') { if (!net.host) { toast('等主機開新局'); return; } netSend({ t: 'again', seed }); }

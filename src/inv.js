@@ -139,14 +139,14 @@ function monsterDrop(killer, m) {
   giveGold(killer.side, gold);
   floatText(m.x, m.y, '+' + gold + ' 金幣', 'up');
   // 精英變種掉落機率加倍，多打的那份風險要有更值得的回報
-  if (grng() < (m.elite ? 0.5 : 0.25)) {
+  if (grng() < (m.elite ? 0.6 : 0.3)) {
     const it = rollItem(rollQ(tbl));
     if (takeItem(killer.side, it)) {
       log(`　掉落 <span class="r${it.r}">${itemName(it)}</span> ${itemStats(it)}`);
       got = true;
     } else log(`　掉落 <span class="r${it.r}">${itemName(it)}</span>（自動分解）`);
   }
-  if (grng() < (m.elite ? 0.3 : 0.15)) {
+  if (grng() < (m.elite ? 0.5 : 0.25)) {
     const b = giveBook(killer.side, rollQ(tbl));
     if (b) { log(`　掉落技能書 <b class="q${SK[b.id].q}">${SK[b.id].n}</b>`); got = true; }
   }

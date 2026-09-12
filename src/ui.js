@@ -1362,14 +1362,15 @@ function onHover(ev) {
 function select(u) {
   sel = u;
   phase = 'sel';
-  skillMode = null;
+  skillMode = null; teleMode = false;
   reach = u.moved ? null : reachOf(u);
   drawRanges(); showCard(u); refreshRoster();
   $('actbar').classList.toggle('hide', u.side !== G.cur || (u.moved && u.acted));
   $('btnUndo').disabled = !preMove || preMove.uid !== u.id;
+  $('btnTele').classList.toggle('hide', !canTeleTeammate(u));
 }
 function deselect() {
-  sel = null; phase = 'idle'; skillMode = null;
+  sel = null; phase = 'idle'; skillMode = null; teleMode = false;
   clearOverlay(); hideCard(); hideForecast();
   $('actbar').classList.add('hide');
   refreshRoster();
@@ -1402,6 +1403,14 @@ function onClick(ev) {
     if (K_ALLY.includes(s.k) && (!u || u.side !== sel.side)) { toast('要選友軍'); return; }
     skillMode = null;
     send(a);
+    return;
+  }
+
+  // 傳送隊友：選一個活著的隊友，傳到他旁邊
+  if (teleMode && sel) {
+    teleMode = false;
+    if (!u || u.side !== sel.side || u === sel || !isHero(u)) { toast('請選一個隊友'); return; }
+    send({ kind: 'teleTeam', uid: sel.id, tid: u.id });
     return;
   }
 

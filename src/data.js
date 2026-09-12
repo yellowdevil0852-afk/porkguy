@@ -34,6 +34,7 @@ function isArenaTurn(t) {
 const LEASH = 8;                         // 怪物離營地最遠追多少格
 const REVIVE_TURNS = 3;                  // 英雄倒下後幾回合在營地復活
 const REVIVE_DASH = 2;                   // 復活後兩回合的額外移動力
+const TELE_DIST = 20;                    // 復活後離最近隊友超過這個距離，才能傳送過去
 const CAMP_HEAL = 0.25;                  // 站在營地周圍一格，每回合回復最大生命的幾成
 // 怪群等級（依營地離王座的遠近）。英雄封頂 Lv10，但怪物的最高等級跟著地圖大小走——
 // 地圖越大，遊戲拖越長，角色也該練得越高，中心的最終守衛才有意義（不是站著的經驗值）。
@@ -45,6 +46,14 @@ function monLvFor(frac) {
   return Math.max(1, Math.round(maxLv - (maxLv - 1) * frac));
 }
 const MON_REVIVE_BASE = 5;               // 怪物重生的底線回合數，之後每一等 +1
+// 怪物隨回合數小幅成長，彌補玩家裝備/屬性點越疊越多造成的差距——
+// 怪物本身的等級是「離王座距離」算出來的固定值，重生也不會重新算，
+// 打越久相對就越弱；用平方根曲線（先快後緩，弧度上升）補一個全域倍率，
+// 封頂 +50%，不會蓋過裝備/等級成長本身，純粹是拉住後期差距別拉太開。
+const MON_SCALE_CAP = 1.5, MON_SCALE_K = 0.12;
+function monScaleFor(turn) {
+  return Math.min(MON_SCALE_CAP, 1 + MON_SCALE_K * Math.sqrt(Math.max(0, turn - 1)));
+}
 // 精英變種：跟首領共用「換色＋放大」那套做法，但是隨機出現在任何一般怪身上，
 // 不占地圖版面、不用新模型，純粹讓「這隻不太一樣」有機會發生在任何一場戰鬥裡。
 const MON_ELITE = { chance: 0.15, hp: 1.4, atk: 1.25, def: 1.15, exp: 1.8, gold: 1.6, tint: 0xd68cff };

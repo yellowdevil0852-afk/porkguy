@@ -609,6 +609,7 @@ button.prime:hover:not(:disabled){background:linear-gradient(180deg,#e0b661,#b08
   <div id="skills" class="hide"></div>
   <div id="actbar" class="hide">
     <button id="btnUndo">取消移動</button>
+    <button id="btnTele" class="hide">傳送隊友</button>
   </div>
   <div id="bottom">
     <button id="btnEnd" class="prime">結束回合</button>
@@ -5135,6 +5136,7 @@ function isArenaTurn(t) {
 const LEASH = 8;                         // 怪物離營地最遠追多少格
 const REVIVE_TURNS = 3;                  // 英雄倒下後幾回合在營地復活
 const REVIVE_DASH = 2;                   // 復活後兩回合的額外移動力
+const TELE_DIST = 20;                    // 復活後離最近隊友超過這個距離，才能傳送過去
 const CAMP_HEAL = 0.25;                  // 站在營地周圍一格，每回合回復最大生命的幾成
 // 怪群等級（依營地離王座的遠近）。英雄封頂 Lv10，但怪物的最高等級跟著地圖大小走——
 // 地圖越大，遊戲拖越長，角色也該練得越高，中心的最終守衛才有意義（不是站著的經驗值）。
@@ -5146,6 +5148,14 @@ function monLvFor(frac) {
   return Math.max(1, Math.round(maxLv - (maxLv - 1) * frac));
 }
 const MON_REVIVE_BASE = 5;               // 怪物重生的底線回合數，之後每一等 +1
+// 怪物隨回合數小幅成長，彌補玩家裝備/屬性點越疊越多造成的差距——
+// 怪物本身的等級是「離王座距離」算出來的固定值，重生也不會重新算，
+// 打越久相對就越弱；用平方根曲線（先快後緩，弧度上升）補一個全域倍率，
+// 封頂 +50%，不會蓋過裝備/等級成長本身，純粹是拉住後期差距別拉太開。
+const MON_SCALE_CAP = 1.5, MON_SCALE_K = 0.12;
+function monScaleFor(turn) {
+  return Math.min(MON_SCALE_CAP, 1 + MON_SCALE_K * Math.sqrt(Math.max(0, turn - 1)));
+}
 // 精英變種：跟首領共用「換色＋放大」那套做法，但是隨機出現在任何一般怪身上，
 // 不占地圖版面、不用新模型，純粹讓「這隻不太一樣」有機會發生在任何一場戰鬥裡。
 const MON_ELITE = { chance: 0.15, hp: 1.4, atk: 1.25, def: 1.15, exp: 1.8, gold: 1.6, tint: 0xd68cff };
@@ -7030,7 +7040,7 @@ let G = {
   seed: 1
 };
 let sel = null, reach = null, phase = 'idle', busy = false;
-let preMove = null, skillMode = null;
+let preMove = null, skillMode = null, teleMode = false;
 let mode = 'local', myTeam = 0;
 let uidSeq = 0, itemSeq = 0, wakeSeq = 0;
 // 每次 startTurn() 真的開始一個新回合就 +1——競技場最後一擊可能在
@@ -7088,6 +7098,8 @@ function statOf(u, k) {
   let v = d[k] || 0;
   v += (u.lv - 1) * ((isHero(u) ? LV_GAIN : MON_GAIN)[k] || 0);
   if (!isHero(u) && u.elite && MON_ELITE[k]) v = Math.round(v * MON_ELITE[k]);
+  // 怪物隨回合數小幅成長，見 data.js 的 monScaleFor() 註解
+  if (!isHero(u) && (k === 'hp' || k === 'atk' || k === 'def')) v = Math.round(v * monScaleFor(G.turn));
   if (isHero(u)) {
     if (u.lv >= PROMO_LV) v += PROMO[k] || 0;
     for (const s in u.equip) { const it = u.equip[s]; if (it && it[k]) v += it[k]; }
@@ -7298,6 +7310,15 @@ function freeNear(cx, cy, minR) {
       return [x, y];
     }
   return null;
+}
+
+// 傳送隊友：只有剛復活、身上還有 reviveDash 加成、離最近隊友超過
+// TELE_DIST 格的時候才能用——按鈕存在的時間跟復活後加移動一樣長，
+// 過期加成一消失，按鈕自己就會跟著收掉。
+function canTeleTeammate(u) {
+  if (!isHero(u) || !u.st.some(s => s.reviveDash)) return false;
+  const mates = alive().filter(o => o.side === u.side && o !== u && isHero(o));
+  return mates.length > 0 && !mates.some(o => dist(u, o) <= TELE_DIST);
 }
 
 function targetsOf(u) {
@@ -7832,6 +7853,19 @@ async function runAction(a) {
     // 一騎當千這類「本回合殺人就恢復行動」的技能，本來就是要接著攻擊用的——
     // 放技能本身不能算用掉這回合的行動，不然「這回合殺人才有用」永遠碰不到
     if (!SK[a.skill].killRefresh) u.acted = true;
+  } else if (a.kind === 'teleTeam') {
+    const t = byId(a.tid);
+    if (t && t.alive && canTeleTeammate(u)) {
+      const spot = freeNear(t.x, t.y);
+      if (spot) {
+        playFX('buff', u);           // 消失前先在原地閃一下
+        u.x = spot[0]; u.y = spot[1]; placeUnit(u);
+        playFX('buff', u);           // 到達新位置再閃一次
+        u.moved = true;
+        log(`<b>${nameOf(u)}</b> 傳送到 ${nameOf(t)} 身邊`);
+        await openChest(u);
+      } else toast(nameOf(t) + ' 旁邊沒有空地');
+    }
   } else if (a.kind === 'wait') {
     u.moved = true; u.acted = true;
   }
@@ -8472,7 +8506,9 @@ async function startTurn(side) {
     if (!spot) { u.down = 1; continue; }
     u.x = spot[0]; u.y = spot[1]; u.alive = true;
     u.hp = Math.ceil(mhpOf(u) / 2);
-    u.st = [{ id: 'mov', v: REVIVE_DASH, turns: 3 }];   // 剛回來的兩個回合腳程快一點
+    // reviveDash 這個額外欄位純粹拿來識別「這是復活加成」，跟其他來源的
+    // mov 狀態分開判斷——傳送隊友按鈕要在這個加成還在的時候才能用
+    u.st = [{ id: 'mov', v: REVIVE_DASH, turns: 3, reviveDash: 1 }];   // 剛回來的兩個回合腳程快一點
     u.turned = false; u.dir = side === 0 ? 3 : 7;
     u.spawnAt = null;                                   // 下次倒下要重算位置，不要沿用舊的
     buildUnitView(u); makeTag(u);
@@ -9424,14 +9460,14 @@ function monsterDrop(killer, m) {
   giveGold(killer.side, gold);
   floatText(m.x, m.y, '+' + gold + ' 金幣', 'up');
   // 精英變種掉落機率加倍，多打的那份風險要有更值得的回報
-  if (grng() < (m.elite ? 0.5 : 0.25)) {
+  if (grng() < (m.elite ? 0.6 : 0.3)) {
     const it = rollItem(rollQ(tbl));
     if (takeItem(killer.side, it)) {
       log(`　掉落 <span class="r${it.r}">${itemName(it)}</span> ${itemStats(it)}`);
       got = true;
     } else log(`　掉落 <span class="r${it.r}">${itemName(it)}</span>（自動分解）`);
   }
-  if (grng() < (m.elite ? 0.3 : 0.15)) {
+  if (grng() < (m.elite ? 0.5 : 0.25)) {
     const b = giveBook(killer.side, rollQ(tbl));
     if (b) { log(`　掉落技能書 <b class="q${SK[b.id].q}">${SK[b.id].n}</b>`); got = true; }
   }
@@ -10811,14 +10847,15 @@ function onHover(ev) {
 function select(u) {
   sel = u;
   phase = 'sel';
-  skillMode = null;
+  skillMode = null; teleMode = false;
   reach = u.moved ? null : reachOf(u);
   drawRanges(); showCard(u); refreshRoster();
   $('actbar').classList.toggle('hide', u.side !== G.cur || (u.moved && u.acted));
   $('btnUndo').disabled = !preMove || preMove.uid !== u.id;
+  $('btnTele').classList.toggle('hide', !canTeleTeammate(u));
 }
 function deselect() {
-  sel = null; phase = 'idle'; skillMode = null;
+  sel = null; phase = 'idle'; skillMode = null; teleMode = false;
   clearOverlay(); hideCard(); hideForecast();
   $('actbar').classList.add('hide');
   refreshRoster();
@@ -10851,6 +10888,14 @@ function onClick(ev) {
     if (K_ALLY.includes(s.k) && (!u || u.side !== sel.side)) { toast('要選友軍'); return; }
     skillMode = null;
     send(a);
+    return;
+  }
+
+  // 傳送隊友：選一個活著的隊友，傳到他旁邊
+  if (teleMode && sel) {
+    teleMode = false;
+    if (!u || u.side !== sel.side || u === sel || !isHero(u)) { toast('請選一個隊友'); return; }
+    send({ kind: 'teleTeam', uid: sel.id, tid: u.id });
     return;
   }
 
@@ -11841,6 +11886,11 @@ async function boot() {
   $('btnUndo').onclick = () => {
     if (!canAct() || !sel || !preMove || preMove.uid !== sel.id || sel.acted) return;
     send({ kind: 'undo', uid: sel.id, x: preMove.x, y: preMove.y });
+  };
+  $('btnTele').onclick = () => {
+    if (!canAct() || !sel || !canTeleTeammate(sel)) return;
+    teleMode = true;
+    toast('選一個隊友，傳送到他旁邊');
   };
   $('rAgain').onclick = () => {
     const seed = (Math.random() * 1e9) | 0;

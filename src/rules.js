@@ -7,7 +7,7 @@ let G = {
   seed: 1
 };
 let sel = null, reach = null, phase = 'idle', busy = false;
-let preMove = null, skillMode = null;
+let preMove = null, skillMode = null, teleMode = false;
 let mode = 'local', myTeam = 0;
 let uidSeq = 0, itemSeq = 0, wakeSeq = 0;
 // 每次 startTurn() 真的開始一個新回合就 +1——競技場最後一擊可能在
@@ -65,6 +65,8 @@ function statOf(u, k) {
   let v = d[k] || 0;
   v += (u.lv - 1) * ((isHero(u) ? LV_GAIN : MON_GAIN)[k] || 0);
   if (!isHero(u) && u.elite && MON_ELITE[k]) v = Math.round(v * MON_ELITE[k]);
+  // 怪物隨回合數小幅成長，見 data.js 的 monScaleFor() 註解
+  if (!isHero(u) && (k === 'hp' || k === 'atk' || k === 'def')) v = Math.round(v * monScaleFor(G.turn));
   if (isHero(u)) {
     if (u.lv >= PROMO_LV) v += PROMO[k] || 0;
     for (const s in u.equip) { const it = u.equip[s]; if (it && it[k]) v += it[k]; }
@@ -275,6 +277,15 @@ function freeNear(cx, cy, minR) {
       return [x, y];
     }
   return null;
+}
+
+// 傳送隊友：只有剛復活、身上還有 reviveDash 加成、離最近隊友超過
+// TELE_DIST 格的時候才能用——按鈕存在的時間跟復活後加移動一樣長，
+// 過期加成一消失，按鈕自己就會跟著收掉。
+function canTeleTeammate(u) {
+  if (!isHero(u) || !u.st.some(s => s.reviveDash)) return false;
+  const mates = alive().filter(o => o.side === u.side && o !== u && isHero(o));
+  return mates.length > 0 && !mates.some(o => dist(u, o) <= TELE_DIST);
 }
 
 function targetsOf(u) {
@@ -809,6 +820,19 @@ async function runAction(a) {
     // 一騎當千這類「本回合殺人就恢復行動」的技能，本來就是要接著攻擊用的——
     // 放技能本身不能算用掉這回合的行動，不然「這回合殺人才有用」永遠碰不到
     if (!SK[a.skill].killRefresh) u.acted = true;
+  } else if (a.kind === 'teleTeam') {
+    const t = byId(a.tid);
+    if (t && t.alive && canTeleTeammate(u)) {
+      const spot = freeNear(t.x, t.y);
+      if (spot) {
+        playFX('buff', u);           // 消失前先在原地閃一下
+        u.x = spot[0]; u.y = spot[1]; placeUnit(u);
+        playFX('buff', u);           // 到達新位置再閃一次
+        u.moved = true;
+        log(`<b>${nameOf(u)}</b> 傳送到 ${nameOf(t)} 身邊`);
+        await openChest(u);
+      } else toast(nameOf(t) + ' 旁邊沒有空地');
+    }
   } else if (a.kind === 'wait') {
     u.moved = true; u.acted = true;
   }
@@ -1449,7 +1473,9 @@ async function startTurn(side) {
     if (!spot) { u.down = 1; continue; }
     u.x = spot[0]; u.y = spot[1]; u.alive = true;
     u.hp = Math.ceil(mhpOf(u) / 2);
-    u.st = [{ id: 'mov', v: REVIVE_DASH, turns: 3 }];   // 剛回來的兩個回合腳程快一點
+    // reviveDash 這個額外欄位純粹拿來識別「這是復活加成」，跟其他來源的
+    // mov 狀態分開判斷——傳送隊友按鈕要在這個加成還在的時候才能用
+    u.st = [{ id: 'mov', v: REVIVE_DASH, turns: 3, reviveDash: 1 }];   // 剛回來的兩個回合腳程快一點
     u.turned = false; u.dir = side === 0 ? 3 : 7;
     u.spawnAt = null;                                   // 下次倒下要重算位置，不要沿用舊的
     buildUnitView(u); makeTag(u);
