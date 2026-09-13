@@ -403,29 +403,48 @@
 
 ## 已出但沒辦法在單機驗證的修正
 
-- **跨網路連線逾時（階段 2：P2P/TURN 卡住）——已加自架中繼備援解決**：
+- **跨網路連線逾時（階段 2：P2P/TURN 卡住）——已用自架中繼＋DNS-01 憑證解決**：
   之前查到免費 TURN（PeerJS 內建 + Open Relay Project）不夠穩定，
-  下一步建議是換更穩定的 TURN 或自架 coturn（通常要付費）。使用者選了
-  另一條路：自己在 Oracle Cloud 的 Always Free 額度上架一台 Ampere A1
-  VM，跑一個純 WebSocket 中繼伺服器（`relay-server.js`，新增檔案，
-  Node.js + `ws`，不用框架）。這不是 TURN，是完全繞開 WebRTC NAT
-  穿透的方案——兩邊都對這台公網主機發起普通的 outbound WebSocket
-  連線，伺服器單純轉發訊息，沒有 STUN/TURN 協商這一步，穩定性遠高於
-  免費 TURN。`net.js` 新增 `wsAdapter()`／`wsTryConnect()`，把裸的
-  WebSocket 包成跟 PeerJS `DataConnection` 一樣的介面
-  （`.send()`／`.on('open'|'data'|'close')`／`.open`），`hookConn()`
-  跟其餘所有遊戲邏輯完全不用改。`startHost()`/`startJoin()` 改成先試
-  中繼（`WS_RELAY_URL` 有設定的話，短逾時），連不到才退回原本的
-  PeerJS+TURN 路徑（兩套都留著，互為備援）；guest 端額外處理「中繼連
-  得到但一直配對不到對方」的情況（多半是房主那邊退回了 PeerJS），逾時
-  後也跟著改走 PeerJS，避免兩邊各用各的傳輸方式永遠碰不到面。
-  `WS_RELAY_URL` 預設空字串，不影響原本沒架中繼的使用者。
-  本機用真的 WebSocket relay server（本地跑 `relay-server.js`）＋兩個
-  瀏覽器分頁完整測過：配對、真正的遊戲訊息轉發（結束回合同步）、斷線
-  偵測、同房號重新連線全部驗證通過；也測過中繼伺服器連不到時正確且
-  瞬間（不用等逾時）退回 PeerJS。**待辦**：`WS_RELAY_URL` 需要使用者
-  填入自己 VM 的實際位址才會真的啟用，目前是空字串（純 PeerJS，行為
-  跟改之前一樣）。
+  使用者選了自架路線：Oracle Cloud Always Free 的 Ampere A1 VM 上跑
+  一個純 WebSocket 中繼伺服器（`relay-server.js`，新增檔案）。這不是
+  TURN，是完全繞開 WebRTC NAT 穿透的方案——兩邊都對這台公網主機發起
+  普通的 outbound 連線，伺服器單純轉發訊息。`net.js` 新增
+  `wsAdapter()`／`wsTryConnect()`，把 WebSocket 包成跟 PeerJS
+  `DataConnection` 一樣的介面，`hookConn()` 跟其餘遊戲邏輯完全不用改；
+  `startHost()`/`startJoin()` 先試中繼、連不到才退回 PeerJS+TURN。
+
+  **中間走了不少彎路，最後才找到真正的根因**：第一版用 `ws://`（未
+  加密）測試，使用者回報「同 WiFi 能連、行動網路連不到」，一路懷疑
+  是連接埠被行動網路擋（8080→443，開了兩層防火牆、Oracle Security
+  List 跟 VM 的 ufw），結果 443 對外確認連得到、行為卻完全沒變——直到
+  在**真正發布的 HTTPS 網址**上開瀏覽器主控台，才看到真正的錯誤是
+  **Mixed Content**：HTTPS 頁面規定只能連 `wss://`，不能連 `ws://`，
+  這條規則跟網路種類完全無關，「同 WiFi 能連」其實是 PeerJS 直連在
+  同區網成功、中繼從頭到尾沒被真正用到過。兩輪連接埠調整都是在錯的
+  方向排查。
+
+  補 `wss://` 需要憑證：想走 Let's Encrypt 正規流程（試過 Caddy 自動
+  申請）但發現**這個 Oracle 帳號/區域的 80、443 從外面連不進來**
+  （連 Let's Encrypt 官方驗證伺服器自己都連不到，不是 Security
+  List／ufw 設定錯誤，兩層都確認開對了，原因不明）。先用自簽憑證
+  （`openssl req -x509`）頂著，代價是每個瀏覽器第一次要手動點過一次
+  「繼續前往」接受警告（這步驟沒辦法用程式碼繞過，瀏覽器故意不開放
+  網頁 JS 操作憑證信任清單的能力）。最後升級成真正受信任的憑證：
+  申請免費 DuckDNS 網域、用 `acme.sh` 的 DuckDNS DNS API 外掛走
+  **DNS-01 驗證**——完全不需要 80/443 對外連得到，只需要證明能修改
+  網域的 DNS 記錄，徹底繞開那個原因不明的埠限制。`relay-server.js`
+  改用 Node 內建 `https` 模組包住 `WebSocketServer`，讀 `fullchain.pem`
+  （真憑證要帶中繼鏈，跟自簽版只需要 `cert.pem` 不一樣）。
+
+  最終狀態：`WS_RELAY_URL = 'wss://porkguy.duckdns.org:8080'`，真正
+  受信任的憑證，瀏覽器不會跳任何警告，acme.sh 自動排 cron 定期續期
+  （Let's Encrypt 90 天效期，續期時自動重啟 relay，不用手動維護）。
+  8080 這個連接埠從頭到尾都是通的，443／Caddy 那輪調整已經停用，
+  純粹是排查過程的歷史記錄。驗證：真憑證連線不用加
+  `rejectUnauthorized:false` 就成功（證明不是繞過驗證）；真正發布的
+  HTTPS 網址上確認 Mixed Content 錯誤完全消失；完整配對+雙向訊息
+  轉發+斷線重連全部重新測過一輪。細節見 [skills.md](skills.md)
+  四十、四十一節。
 
 ## 停在「文本討論」階段、還沒有具體行動的方向
 

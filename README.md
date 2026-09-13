@@ -84,14 +84,22 @@ base64 模型一起塞進 `src/index.html` 的佔位符：
 兩邊各自選三個職業，湊齊了房主才開局。
 
 **自架中繼備援（選用）**：兩邊都在對稱式 NAT 後面時，WebRTC 的 P2P/TURN
-交握偶爾會卡住連不起來。`relay-server.js`（純 Node.js + `ws`，不用框架）
-是一個簡單的 WebSocket 中繼伺服器，架在自己的一台公網主機上（例如
-Oracle Cloud Always Free 的 Ampere A1 執行個體），把 `src/net.js` 開頭的
-`WS_RELAY_URL` 改成自己主機的位址（例如 `ws://1.2.3.4:8080`），連線時
-兩邊會先試中繼、連不到才退回 PeerJS+TURN，兩套互為備援。部署方式：
-`npm install ws`、`node relay-server.js`（預設埠 8080，可用環境變數
-`PORT` 改），建議搭配 `pm2` 開機自動啟動。`WS_RELAY_URL` 留空（預設）
-就完全不會用到這個功能，行為跟原本一樣。
+交握偶爾會卡住連不起來。`relay-server.js`（Node.js + `ws`）是一個簡單的
+WebSocket 中繼伺服器，架在自己的一台公網主機上（例如 Oracle Cloud
+Always Free 的 Ampere A1 執行個體），把 `src/net.js` 開頭的
+`WS_RELAY_URL` 改成自己主機的位址，連線時兩邊會先試中繼、連不到才退回
+PeerJS+TURN，兩套互為備援。`WS_RELAY_URL` 留空（預設）就完全不會用到
+這個功能，行為跟原本一樣。
+
+**一定要是 `wss://`（加密），不能是 `ws://`**——遊戲網頁是 HTTPS
+（GitHub Pages 強制），瀏覽器的 Mixed Content 規則不准 HTTPS 頁面連
+未加密的 `ws://`，不管什麼網路都一樣擋（曾經誤以為是連接埠被行動網路
+擋掉，實際上是這條規則，細節見 [skills.md](skills.md) 四十一節）。
+`wss://` 需要憑證，`relay-server.js` 檔頭的註解有完整部署步驟，推薦
+用免費的 DuckDNS 網域 + `acme.sh` 的 DNS-01 驗證拿 Let's Encrypt 真憑證
+（不需要對外開放 80/443，繞開部分雲端主機這兩個埠連不進來的問題）；
+沒有網域的話也可以退回自簽憑證，但每個瀏覽器第一次連線都要手動接受
+一次安全性警告。
 
 想做到「丟個網址就能玩」，把 `porkguy.html` 上傳到任何靜態空間即可（GitHub Pages / Netlify Drop / itch.io）。
 單檔沒有相依，上傳完直接就是一個網址；順便也解決 `file://` 下某些瀏覽器存不了設定的問題。

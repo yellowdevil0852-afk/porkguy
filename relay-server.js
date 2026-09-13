@@ -11,26 +11,41 @@
    不能連」根本是誤判——同 WiFi 那次其實是退回 PeerJS 直連成功，中繼
    從頭到尾沒被用到過。
 
-   本來想用 Let's Encrypt 拿正式憑證（試過 Caddy 自動申請），但這個
-   帳號/區域的 80、443 埠從外面連不進來（Let's Encrypt 自己的驗證
-   伺服器也連不到，不是本機防火牆設定的問題，原因不明），只好退而求
-   其次用**自簽憑證**：不需要 80/443、不需要網域名稱，缺點是瀏覽器
-   第一次連線會跳「不安全」警告，需要使用者手動點過一次「繼續前往」
-   （對外開一個 https 頁面測試用，接受過一次憑證後瀏覽器會記住，之後
-   wss:// 連線就會正常放行）。
+   本來想用 Let's Encrypt 拿正式憑證，第一步試 Caddy 自動申請（走
+   http-01／tls-alpn-01，需要 80/443 對外連得到），但這個帳號/區域的
+   80、443 從外面連不進來（Let's Encrypt 自己的驗證伺服器也連不到，
+   不是本機防火牆設定的問題，原因不明）。中間退而求其次用過一版自簽
+   憑證頂著（缺點是每個瀏覽器第一次用都要手動點「繼續前往」接受警告），
+   後來改用**DNS-01 驗證**徹底解決：申請一個免費的 DuckDNS 網域名字
+   指到這台 VM，用 `acme.sh` 的 DuckDNS 外掛拿 Let's Encrypt 憑證——
+   DNS-01 完全不需要 80/443 對外連得到，繞開了 Oracle 那個原因不明的
+   限制，而且是真正受信任的憑證，瀏覽器不會再跳任何警告。
 
-   部署方式：
-     mkdir -p ~/certs
-     openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
-       -keyout ~/certs/key.pem -out ~/certs/cert.pem -subj "/CN=你的VM公網IP"
+   部署方式（DNS-01，推薦，需要一個免費 DuckDNS 網域）：
+     1. 去 https://duckdns.org 登入、申請一個子網域指向這台 VM 的 IP，
+        複製它給的 token。
+     2. curl https://get.acme.sh | sh && source ~/.bashrc
+     3. export DuckDNS_Token="你的token"（只在這次 SSH session 用，
+        不要寫進任何檔案，用完這個 session 結束就自動消失）
+     4. ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt
+     5. ~/.acme.sh/acme.sh --issue --dns dns_duckdns -d 你的子網域.duckdns.org
+     6. mkdir -p ~/certs
+        ~/.acme.sh/acme.sh --install-cert -d 你的子網域.duckdns.org \
+          --cert-file ~/certs/cert.pem \
+          --key-file ~/certs/key.pem \
+          --fullchain-file ~/certs/fullchain.pem \
+          --reloadcmd "pm2 restart relay"
+     acme.sh 會自動裝一個 cron job 定期續期（Let's Encrypt 憑證 90 天
+     到期），續期時會自動跑 --reloadcmd 重啟 relay，不用手動維護。
+
      npm install ws
      node relay-server.js   （預設埠 8080，可用環境變數 PORT 改；
                               憑證路徑預設 ~/certs，可用 SSL_CERT_DIR 改）
 
-   部署後，使用者（跟朋友）**都要先在瀏覽器打開一次**
-   `https://你的VM公網IP:8080/`，點過「繼續前往（不安全）」接受自簽
-   憑證，遊戲的 wss:// 連線才連得上——這是自簽憑證無法避免的手動步驟，
-   只需要做一次。
+   （備案：如果沒有網域、不想弄 DuckDNS，也可以退回自簽憑證——
+   `openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout ~/certs/key.pem
+   -out ~/certs/cert.pem -subj "/CN=你的VM公網IP"`，缺點是每個瀏覽器第一次
+   連線都要手動點過一次「繼續前往」接受警告，之後才會放行 wss:// 連線。）
 
    協定（跟 src/net.js 的 wsTryConnect() 對應）：
    - 連線網址帶兩個 query 參數：?room=房號&role=host 或 role=guest
@@ -52,7 +67,10 @@ const PORT = process.env.PORT || 8080;
 const certDir = process.env.SSL_CERT_DIR || (os.homedir() + '/certs');
 
 const server = https.createServer({
-  cert: fs.readFileSync(certDir + '/cert.pem'),
+  // fullchain（葉憑證+中繼 CA）比單一 cert.pem 保險：真正的 CA 簽發憑證
+  // 需要瀏覽器能組出完整信任鏈，少數瀏覽器不會自己去抓中繼憑證。
+  // 用 openssl 自簽的話沒有 fullchain.pem，改回讀 cert.pem 即可。
+  cert: fs.readFileSync(certDir + '/fullchain.pem'),
   key: fs.readFileSync(certDir + '/key.pem')
 }, (req, res) => { res.writeHead(200); res.end('porkguy relay ok'); });
 

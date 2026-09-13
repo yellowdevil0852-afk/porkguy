@@ -1706,3 +1706,78 @@ reject——因為介面完全一樣，`hookConn()`、`netSend()`、`onNetData()
 `node build.js` 重新打包。目前發布的版本 `WS_RELAY_URL` 是空字串，
 純 PeerJS，行為跟這批之前完全一樣——要真的啟用中繼備援還需要使用者
 填入自己主機的位址。
+
+## 四十一、線上對戰中繼伺服器的真正問題：Mixed Content，不是連接埠——最後用 DuckDNS + DNS-01 拿到真憑證
+
+上一批（三十九節之後、CLAUDE.md 記錄的四十節）以為中繼伺服器已經上線
+可用，使用者實測「同 WiFi 能連、手機切行動網路連不到」，一路排查才發現
+問題比想像中更根本。完整過程：
+
+### 第一輪誤判：以為是連接埠被行動網路擋掉
+
+`ws://213.35.125.145:8080` 在本機/我這邊測都正常，但使用者手機切行動
+網路連不到、卡在「階段2 P2P/中繼卡住」。當時猜測是行動網路對非標準
+連接埠（8080）的限制，改成 443（HTTPS 標準埠，理論上最不會被擋）。
+折騰了一輪 Oracle Security List、VM 內建 ufw 兩層防火牆設定之後，443
+確實對外可以連（用真的用戶端反覆測過），但使用者實測結果**完全一樣**——
+證明「連接埠」根本不是問題所在。
+
+### 真正的原因：瀏覽器的 Mixed Content 規則
+
+直接在真正發布的 HTTPS 網址（`https://yellowdevil0852-afk.github.io/...`）
+上開瀏覽器主控台，才看到真正的錯誤：
+
+```
+Mixed Content: The page at 'https://...porkguy.html' was loaded over HTTPS,
+but attempted to connect to the insecure WebSocket endpoint 'ws://...'.
+This request has been blocked; this endpoint must be available over WSS.
+```
+
+HTTPS 頁面依規定只能連 `wss://`（加密），不能連 `ws://`（未加密）——
+這條規則不管什麼網路都一樣擋，**跟 WiFi/行動網路完全無關**。之前「同
+WiFi 能連」的體感，其實是 PeerJS 直連在同一個區網下不需要真的穿過
+NAT 就成功了，跟中繼伺服器一點關係都沒有——**中繼從一開始上線到這裡，
+從來沒有真正被用到過一次**，前面兩輪（8080、443）的埠號調整全部是
+在錯誤的方向上排查。
+
+### 補 wss：先試自簽憑證，再換成真正的憑證
+
+`wss://` 需要憑證。本來想用 Let's Encrypt 走標準流程（用 Caddy 自動
+申請），但申請憑證的兩種常見驗證方式（http-01 靠 80 埠、tls-alpn-01
+靠 443 埠）都需要 Let's Encrypt 自己的驗證伺服器連得到這台 VM，實測
+**這個帳號/區域的 80、443 從外面完全連不進來**（不只我這邊連不到，
+Let's Encrypt 官方驗證伺服器自己也回報連不到），原因不明，猜測是
+Oracle 這個帳號/區域層級的限制，不是 Security List／ufw 設定錯誤
+（兩層都確認開對了）。
+
+先上一版**自簽憑證**頂著（`openssl req -x509 ...`，不需要 80/443、
+不需要網域名字）：`relay-server.js` 改用 Node 內建 `https` 模組包住
+`WebSocketServer`，一樣跑在確定通的 8080。自簽憑證的代價是每個瀏覽器
+第一次連線都要手動打開一次 `https://VM_IP:8080/`、點過「繼續前往
+（不安全）」接受警告，之後同一個瀏覽器才會放行 `wss://` 連線——這一步
+沒辦法用程式碼繞過去，是瀏覽器刻意不開放給網頁 JS 操作的能力（防止
+惡意網站偷偷幫使用者「按過」安全警告）。
+
+最後升級成**真正受信任的憑證**：申請一個免費的 DuckDNS 網域
+（`porkguy.duckdns.org`）指到這台 VM，用 `acme.sh` 的 DuckDNS DNS API
+外掛走 **DNS-01 驗證**——這種驗證方式完全不需要 80/443 對外連得到，
+只需要證明「我能修改這個網域的 DNS 記錄」，徹底繞開 Oracle 那個原因
+不明的埠限制。申請流程中途卡過一次：acme.sh 新版預設用 ZeroSSL 當
+憑證機構，ZeroSSL 要求先註冊 email 才能用，改成
+`--set-default-ca --server letsencrypt` 換回 Let's Encrypt（不用註冊
+email）就正常了。憑證裝好之後把 `relay-server.js` 讀的檔案從
+`cert.pem` 換成 `fullchain.pem`（真正 CA 簽發的憑證要帶上中繼憑證鏈，
+瀏覽器才能組出完整信任鏈；自簽憑證沒有這個檔案，用回 `cert.pem`
+即可）。acme.sh 安裝時會自動排一個 cron job 定期續期（Let's Encrypt
+憑證 90 天效期），續期時自動跑 `--reloadcmd "pm2 restart relay"`
+重啟，不用手動維護。
+
+最終狀態：`WS_RELAY_URL = 'wss://porkguy.duckdns.org:8080'`，真正的
+受信任憑證，瀏覽器完全不會跳警告，使用者跟朋友都不用再做任何手動
+步驟。8080 這個連接埠從頭到尾都是通的，中間 443 那輪調整已經沒有
+意義（Caddy 也已經在 VM 上停用），純粹是排查過程的歷史記錄。
+
+驗證：主控台直接對 `wss://porkguy.duckdns.org:8080` 建立連線，**沒有**
+加 `rejectUnauthorized:false` 就成功了（證明是真憑證，不是繞過驗證），
+完整配對+雙向訊息轉發測過一輪；在真正發布的 HTTPS 網址上開瀏覽器
+主控台確認 Mixed Content 錯誤完全消失。
