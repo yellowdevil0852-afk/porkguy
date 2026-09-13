@@ -29,7 +29,7 @@ const ICE_CONFIG = {
 // 發起一般的 outbound WebSocket 連線，完全不用 STUN/TURN 協商，繞開「階段
 // 2」P2P 中繼卡住的問題。空字串代表沒設定，直接跳過、只用 PeerJS。
 // 換成自己的 VM 位址，例如 'ws://123.45.67.89:8080'。
-const WS_RELAY_URL = 'ws://213.35.125.145:443';
+const WS_RELAY_URL = 'wss://213.35.125.145:8080';
 const WS_RELAY_TIMEOUT = 6000;   // 連中繼伺服器本身要多快沒回應就放棄、改走 PeerJS
 
 // 把裸的 WebSocket 包成跟 PeerJS DataConnection 一樣的介面（.send()／.on()／
